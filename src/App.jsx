@@ -10,13 +10,11 @@ import {
   Edit, 
   Trash2, 
   X, 
-  Save, 
   Download,
   AlertCircle,
   Menu,
   ChevronLeft,
-  ChevronRight,
-  MoreVertical
+  ChevronRight
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';

@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, 
@@ -14,15 +15,15 @@ import {
   AlertCircle,
   Menu,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  User
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, updateDoc } from 'firebase/firestore';
 
 // --- Firebase Initialization ---
-// นำ Config ของคุณมาใส่ตรงนี้
-const firebaseConfig = {
+const userFirebaseConfig = {
   apiKey: "AIzaSyCYiPSZJBmjwCp6z6gPdRpWG6vZT8R2wN8",
   authDomain: "vtrackdb.firebaseapp.com",
   projectId: "vtrackdb",
@@ -32,12 +33,16 @@ const firebaseConfig = {
   measurementId: "G-1PYTFGC4YT"
 };
 
+const firebaseConfig = typeof __firebase_config !== 'undefined' 
+  ? JSON.parse(__firebase_config) 
+  : userFirebaseConfig;
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'v-track-system';
 
-// --- Constants & Styles ---
+// --- Constants ---
 const AREAS = ['รังสิต', 'ร่มเกล้า', 'พระราม 9', 'รามอินทรา'];
 
 const STATUSES = [
@@ -49,8 +54,6 @@ const STATUSES = [
   { id: 6, name: 'ส่งเอกสารเบิกจ่ายแล้ว', color: '#10B981', bgColor: '#D1FAE5' }
 ];
 
-// --- Webhook สำหรับ Google Sheets ---
-// นำ URL ที่ได้จาก Google Apps Script (Deploy as Web App) มาวางที่ตัวแปรนี้
 const GOOGLE_SHEETS_WEBHOOK_URL = ''; 
 
 // --- Main Application Component ---
@@ -58,473 +61,289 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
-  // Security State
   const [isUnlocked, setIsUnlocked] = useState(false);
-  
-  // Data States
   const [tasks, setTasks] = useState([]);
   const [settings, setSettings] = useState({ projects: [], companies: [] });
   const [loading, setLoading] = useState(true);
+  const [systemError, setSystemError] = useState('');
 
-  // Authentication & Data Fetching
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // ตรวจสอบว่ากำลังใช้ Config ของ Canvas หรือของผู้ใช้เอง
-        let isCanvasConfig = false;
-        if (typeof __firebase_config !== 'undefined') {
-          try {
-            const envConfig = JSON.parse(__firebase_config);
-            if (envConfig.projectId === firebaseConfig.projectId) {
-              isCanvasConfig = true;
-            }
-          } catch (e) {}
-        }
-
-        if (isCanvasConfig && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token && typeof __firebase_config !== 'undefined') {
           await signInWithCustomToken(auth, __initial_auth_token);
         } else {
-          // หากเป็น Config ส่วนตัวของผู้ใช้ ให้ใช้ Anonymous Login แทน
           await signInAnonymously(auth);
         }
       } catch (error) {
-        // หากเกิดข้อผิดพลาด ให้พยายามล็อกอินแบบ Anonymous อีกครั้งอย่างเงียบๆ
         try {
           await signInAnonymously(auth);
-        } catch (fallbackError) {
-          console.error("Firebase Auth Error:", fallbackError);
+        } catch (fbErr) {
+          setSystemError("Authentication Failed: Please enable Anonymous Sign-in in Firebase Console.");
+          setLoading(false);
         }
       }
     };
     initAuth();
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-    });
-
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    
     if (!document.getElementById('papaparse-script')) {
       const script = document.createElement('script');
       script.id = 'papaparse-script';
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js';
       document.body.appendChild(script);
     }
-
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
     if (!user) return;
-
     const tasksRef = collection(db, 'artifacts', appId, 'public', 'data', 'vtrack_tasks');
     const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'vtrack_settings', 'general');
 
     const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists()) {
-        setSettings(docSnap.data());
+        const data = docSnap.data();
+        setSettings({ projects: data.projects || [], companies: data.companies || [] });
       } else {
-        const defaultSettings = {
-          projects: ['โครงการหมู่บ้าน A', 'โครงการคอนโด B'],
-          companies: ['ร้านวัสดุก่อสร้าง ก', 'บจก. รับเหมา ข']
-        };
-        setDoc(settingsRef, defaultSettings);
-        setSettings(defaultSettings);
+        const def = { projects: ['โครงการหมู่บ้าน A', 'โครงการคอนโด B'], companies: ['ร้าน ก', 'บจก. ข'] };
+        setDoc(settingsRef, def).catch(console.error);
+        setSettings(def);
       }
-    }, (err) => console.error(err));
+    }, () => {
+      setSystemError("Permission Denied (Settings). Check Firestore Rules.");
+      setLoading(false);
+    });
 
     const unsubTasks = onSnapshot(tasksRef, (snapshot) => {
-      const tasksData = [];
-      snapshot.forEach((doc) => {
-        tasksData.push({ id: doc.id, ...doc.data() });
-      });
-      tasksData.sort((a, b) => b.createdAt - a.createdAt);
-      setTasks(tasksData);
+      const data = [];
+      snapshot.forEach((doc) => data.push({ id: doc.id, ...doc.data() }));
+      data.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      setTasks(data);
       setLoading(false);
-    }, (err) => console.error(err));
+    }, () => {
+      setSystemError("Permission Denied (Tasks). Check Firestore Rules.");
+      setLoading(false);
+    });
 
-    return () => {
-      unsubSettings();
-      unsubTasks();
-    };
+    return () => { unsubSettings(); unsubTasks(); };
   }, [user]);
-
-  // --- Helper Functions ---
-  const syncToGoogleSheet = async (data) => {
-    if (!GOOGLE_SHEETS_WEBHOOK_URL) return; // ข้ามการทำงานถ้ายังไม่มี URL
-    try {
-      await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
-        method: 'POST',
-        mode: 'no-cors', // เพื่อป้องกันปัญหา CORS จากฝั่ง Client
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data)
-      });
-    } catch (error) {
-      console.error('Error syncing to Google Sheets:', error);
-    }
-  };
 
   const saveTask = async (taskData, isEdit = false, taskId = null) => {
     const tasksRef = collection(db, 'artifacts', appId, 'public', 'data', 'vtrack_tasks');
-    let docId = taskId;
-    
+    const finalData = { ...taskData, updatedAt: Date.now() };
     if (isEdit && taskId) {
       const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'vtrack_tasks', taskId);
-      await updateDoc(docRef, { ...taskData, updatedAt: Date.now() });
+      await updateDoc(docRef, finalData);
     } else {
-      const newDocRef = await addDoc(tasksRef, { ...taskData, isDeleted: false, createdAt: Date.now() });
-      docId = newDocRef.id;
+      await addDoc(tasksRef, { ...taskData, isDeleted: false, createdAt: Date.now() });
     }
-
-    // Sync to Google Sheets
-    syncToGoogleSheet({ action: isEdit ? 'update' : 'add', id: docId, ...taskData });
   };
 
   const softDeleteTask = async (taskId, reason) => {
     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'vtrack_tasks', taskId);
     await updateDoc(docRef, { isDeleted: true, deleteReason: reason, deletedAt: Date.now() });
-    
-    // Sync to Google Sheets
-    syncToGoogleSheet({ action: 'delete', id: taskId, deleteReason: reason });
   };
 
-  const updateSettings = async (newSettings) => {
+  const updateSettings = async (newSet) => {
     const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'vtrack_settings', 'general');
-    await setDoc(settingsRef, newSettings);
+    await setDoc(settingsRef, newSet);
   };
 
-  // --- UI Components ---
-  const SidebarItem = ({ icon: Icon, label, id }) => (
-    <button
-      onClick={() => setActiveTab(id)}
-      className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 mb-1 ${
-        activeTab === id 
-          ? 'bg-[#C5A059]/10 text-[#C5A059] font-medium' 
-          : 'text-gray-400 hover:bg-white/5 hover:text-white'
-      }`}
-    >
-      <Icon size={20} strokeWidth={activeTab === id ? 2.5 : 1.5} />
-      {isSidebarOpen && <span className="text-sm tracking-wide">{label}</span>}
-    </button>
-  );
-
-  if (loading) {
+  if (systemError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-[#003366]">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="w-12 h-12 border-4 border-[#003366]/20 border-t-[#C5A059] rounded-full animate-spin"></div>
-          <p className="text-sm font-medium text-gray-500 tracking-widest uppercase">Loading</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6 text-center">
+        <div className="bg-white p-8 rounded-3xl shadow-xl border border-red-100 max-w-sm">
+          <AlertCircle size={50} className="mx-auto mb-4 text-red-500" />
+          <h2 className="text-xl font-bold text-gray-800 mb-2">เกิดข้อผิดพลาด</h2>
+          <p className="text-sm text-gray-500">{systemError}</p>
         </div>
       </div>
     );
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="w-12 h-12 border-4 border-[#003366]/10 border-t-[#C5A059] rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-screen bg-[#F9FAFB] font-sans text-gray-800">
-      {/* Sidebar */}
-      <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} transition-all duration-300 bg-[#003366] text-white flex flex-col z-20`}>
-        <div className="h-20 flex items-center justify-between px-6">
-          {isSidebarOpen && <h1 className="text-2xl font-semibold tracking-widest text-white">V<span className="text-[#C5A059]">-TRACK</span></h1>}
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-lg hover:bg-white/10 transition-colors text-gray-300">
-            <Menu size={20} />
-          </button>
+    <div className="flex flex-col md:flex-row h-screen bg-[#FDFDFD] text-gray-900 font-sans">
+      
+      {/* Sidebar - Desktop Only */}
+      <aside className={`hidden md:flex ${isSidebarOpen ? 'w-64' : 'w-20'} flex-col bg-[#003366] text-white transition-all duration-300 relative overflow-hidden`}>
+        <div className="h-20 flex items-center justify-between px-6 border-b border-white/5">
+          {isSidebarOpen && <span className="font-bold text-xl tracking-tighter">V<span className="text-[#C5A059]">-TRACK</span></span>}
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-white/10 rounded-xl"><Menu size={20}/></button>
         </div>
-        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto custom-scrollbar">
-          <SidebarItem icon={LayoutDashboard} label="แดชบอร์ด" id="dashboard" />
-          <SidebarItem icon={PlusCircle} label="เพิ่มใบงานใหม่" id="add" />
-          <SidebarItem icon={FileText} label="จัดการใบงาน" id="management" />
-          <SidebarItem icon={CalendarIcon} label="ปฏิทินนัดหมาย" id="calendar" />
-          <div className="pt-6 mt-6 border-t border-white/10">
-            <SidebarItem icon={Settings} label="ตั้งค่าระบบ" id="settings" />
+        <nav className="flex-1 p-4 space-y-2">
+          <NavItem id="dashboard" icon={LayoutDashboard} label="แดชบอร์ด" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
+          <NavItem id="add" icon={PlusCircle} label="เพิ่มใบงาน" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
+          <NavItem id="management" icon={FileText} label="จัดการข้อมูล" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
+          <NavItem id="calendar" icon={CalendarIcon} label="ปฏิทินงาน" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
+          <div className="pt-4 border-t border-white/5">
+            <NavItem id="settings" icon={Settings} label="ตั้งค่าระบบ" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
           </div>
         </nav>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+      {/* Main Container */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
         {/* Header */}
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-8 z-10 sticky top-0">
-          <h2 className="text-xl font-medium text-[#003366]">
-            {activeTab === 'dashboard' && 'แดชบอร์ดติดตามสถานะงาน'}
-            {activeTab === 'add' && 'เพิ่มใบงานใหม่'}
-            {activeTab === 'management' && 'จัดการและค้นหาใบงาน'}
-            {activeTab === 'calendar' && 'ปฏิทินนัดหมายเข้าซ่อม'}
-            {activeTab === 'settings' && 'ตั้งค่าระบบ'}
+        <header className="h-16 md:h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-6 sticky top-0 z-10">
+          <h2 className="text-lg font-semibold text-[#003366] truncate">
+            {activeTab === 'dashboard' && 'แดชบอร์ดติดตามงาน'}
+            {activeTab === 'add' && 'สร้างใบงานใหม่'}
+            {activeTab === 'management' && 'รายการใบงานทั้งหมด'}
+            {activeTab === 'calendar' && 'ตารางนัดหมาย'}
+            {activeTab === 'settings' && 'การตั้งค่า'}
           </h2>
-          <div className="flex items-center space-x-4">
-            {isUnlocked && (
-              <button 
-                onClick={() => setIsUnlocked(false)}
-                className="text-xs font-medium text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 transition-colors"
-              >
-                ล็อคระบบ
-              </button>
-            )}
-             <span className="text-xs font-medium text-[#10B981] bg-[#10B981]/10 px-3 py-1.5 rounded-full flex items-center">
-               <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] mr-2 animate-pulse"></span>
-               Real-time
-             </span>
+          <div className="flex items-center space-x-3">
+            {isUnlocked && <button onClick={() => setIsUnlocked(false)} className="text-[10px] bg-red-50 text-red-500 px-2 py-1 rounded-md border border-red-100">LOCK</button>}
+            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-[#003366]"><User size={18}/></div>
           </div>
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-auto p-8">
-          <div className="max-w-7xl mx-auto pb-12">
-            {activeTab === 'dashboard' && <DashboardView tasks={tasks} />}
-            {activeTab === 'calendar' && <CalendarAppView tasks={tasks} />}
-            
-            {/* Protected Routes */}
+        <div className="flex-1 overflow-y-auto pb-24 md:pb-8 p-4 md:p-8 custom-scrollbar">
+          <div className="max-w-6xl mx-auto h-full">
             {['add', 'management', 'settings'].includes(activeTab) && !isUnlocked ? (
-               <PinLockView onUnlock={() => setIsUnlocked(true)} />
+              <PinLock onUnlock={() => setIsUnlocked(true)} />
             ) : (
               <>
-                {activeTab === 'add' && <TaskFormView settings={settings} onSave={saveTask} onSuccess={() => setActiveTab('management')} />}
-                {activeTab === 'management' && <ManagementView tasks={tasks} settings={settings} onSave={saveTask} onDelete={softDeleteTask} />}
-                {activeTab === 'settings' && <SettingsView settings={settings} updateSettings={updateSettings} tasks={tasks} onSave={saveTask} />}
+                {activeTab === 'dashboard' && <Dashboard tasks={tasks} />}
+                {activeTab === 'add' && <TaskForm settings={settings} onSave={saveTask} onSuccess={() => setActiveTab('management')} />}
+                {activeTab === 'management' && <Management tasks={tasks} settings={settings} onSave={saveTask} onDelete={softDeleteTask} />}
+                {activeTab === 'calendar' && <CalendarView tasks={tasks} />}
+                {activeTab === 'settings' && <SettingsPanel settings={settings} updateSettings={updateSettings} tasks={tasks} onSave={saveTask} />}
               </>
             )}
           </div>
         </div>
+
+        {/* Bottom Nav - Mobile Only */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex justify-around items-center h-16 px-2 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+          <MobileNavItem id="dashboard" icon={LayoutDashboard} label="หน้าแรก" active={activeTab} set={setActiveTab} />
+          <MobileNavItem id="add" icon={PlusCircle} label="เพิ่ม" active={activeTab} set={setActiveTab} />
+          <MobileNavItem id="management" icon={FileText} label="รายการ" active={activeTab} set={setActiveTab} />
+          <MobileNavItem id="calendar" icon={CalendarIcon} label="ปฏิทิน" active={activeTab} set={setActiveTab} />
+          <MobileNavItem id="settings" icon={Settings} label="ตั้งค่า" active={activeTab} set={setActiveTab} />
+        </nav>
       </main>
     </div>
   );
 }
 
-// ==========================================
-// VIEWS COMPONENTS
-// ==========================================
+// --- UI Sub-Components ---
 
-// 0. PIN Lock View
-function PinLockView({ onUnlock }) {
-  const [pin, setPin] = useState('');
-  const [error, setError] = useState(false);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (pin === '1312') {
-      onUnlock();
-      setError(false);
-    } else {
-      setError(true);
-      setPin('');
-    }
-  };
-
+function NavItem({ id, icon: Icon, label, active, set, open }) {
+  const isAct = active === id;
   return (
-    <div className="flex flex-col items-center justify-center py-20">
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 max-w-sm w-full text-center">
-        <div className="w-16 h-16 bg-[#003366]/5 rounded-full flex items-center justify-center mx-auto mb-6">
-          <Settings size={28} className="text-[#003366]" strokeWidth={1.5} />
-        </div>
-        <h2 className="text-xl font-medium text-[#003366] mb-2">พื้นที่สำหรับผู้ดูแลระบบ</h2>
-        <p className="text-sm text-gray-500 mb-8">กรุณากรอกรหัสผ่านเพื่อเข้าใช้งานส่วนนี้</p>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <input 
-              type="password" 
-              maxLength={4}
-              value={pin}
-              onChange={(e) => {
-                setPin(e.target.value.replace(/\D/g, ''));
-                if (error) setError(false);
-              }}
-              placeholder="••••" 
-              className={`w-full text-center tracking-[1em] text-xl p-3 border rounded-xl focus:outline-none focus:ring-2 transition-colors ${error ? 'border-red-300 focus:ring-red-200' : 'border-gray-200 focus:border-[#C5A059] focus:ring-[#C5A059]/30'} bg-gray-50/50`}
-              autoFocus
-            />
-            {error && <p className="text-red-500 text-xs mt-2">รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่</p>}
-          </div>
-          <button type="submit" className="w-full py-3 text-sm font-medium text-white bg-[#003366] rounded-xl hover:bg-[#002244] transition-colors shadow-sm">
-            ยืนยันรหัสผ่าน
-          </button>
+    <button onClick={() => set(id)} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-2xl transition-all ${isAct ? 'bg-[#C5A059] text-white shadow-lg' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>
+      <Icon size={20} strokeWidth={isAct ? 2.5 : 2} />
+      {open && <span className="text-sm font-medium">{label}</span>}
+    </button>
+  );
+}
+
+function MobileNavItem({ id, icon: Icon, label, active, set }) {
+  const isAct = active === id;
+  return (
+    <button onClick={() => set(id)} className={`flex flex-col items-center justify-center flex-1 h-full transition-all ${isAct ? 'text-[#C5A059]' : 'text-gray-400'}`}>
+      <Icon size={20} strokeWidth={isAct ? 2.5 : 2} />
+      <span className="text-[10px] mt-1 font-medium">{label}</span>
+    </button>
+  );
+}
+
+function PinLock({ onUnlock }) {
+  const [v, setV] = useState('');
+  const sub = (e) => { e.preventDefault(); if (v === '1312') onUnlock(); else setV(''); };
+  return (
+    <div className="flex flex-col items-center pt-16 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="bg-white p-8 rounded-[2rem] shadow-2xl border border-gray-100 w-full max-w-xs text-center">
+        <div className="w-16 h-16 bg-[#003366]/5 rounded-full flex items-center justify-center mx-auto mb-6"><Settings className="text-[#003366]"/></div>
+        <h3 className="font-bold text-gray-800 mb-2">Admin Mode</h3>
+        <p className="text-xs text-gray-400 mb-6">กรุณาระบุรหัสผ่านเพื่อเข้าใช้งาน</p>
+        <form onSubmit={sub}>
+          <input type="password" value={v} onChange={e=>setV(e.target.value)} maxLength={4} placeholder="••••" className="w-full text-center text-3xl tracking-[0.5em] p-4 bg-gray-50 rounded-2xl mb-6 border-none focus:ring-2 focus:ring-[#C5A059]" autoFocus />
+          <button type="submit" className="w-full bg-[#003366] text-white py-4 rounded-2xl font-bold shadow-lg active:scale-95 transition-transform">เข้าสู่ระบบ</button>
         </form>
       </div>
     </div>
   );
 }
 
-// 1. Dashboard View
-function DashboardView({ tasks }) {
-  const currentDate = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(`${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`);
-  const [searchId, setSearchId] = useState('');
-  const [filterCompany, setFilterCompany] = useState('');
-  const [filterProject, setFilterProject] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-
-  const activeTasks = tasks.filter(t => !t.isDeleted);
-
-  const filteredTasks = useMemo(() => {
-    return activeTasks.filter(task => {
-      const taskDate = task.aptDate ? new Date(task.aptDate) : new Date(task.createdAt);
-      const taskMonth = `${taskDate.getFullYear()}-${String(taskDate.getMonth() + 1).padStart(2, '0')}`;
-      const matchMonth = taskMonth === selectedMonth;
-      
-      const matchSearch = task.taskNo.toLowerCase().includes(searchId.toLowerCase());
-      const matchCompany = filterCompany ? task.company === filterCompany : true;
-      const matchProject = filterProject ? task.project === filterProject : true;
-      const matchStatus = filterStatus ? task.status === filterStatus : true;
-
-      return matchMonth && matchSearch && matchCompany && matchProject && matchStatus;
-    });
-  }, [activeTasks, selectedMonth, searchId, filterCompany, filterProject, filterStatus]);
-
-  const pieData = STATUSES.map(s => ({
-    ...s,
-    value: filteredTasks.filter(t => t.status === s.name).length
-  })).filter(s => s.value > 0);
-
-  const totalTasks = filteredTasks.length;
+function Dashboard({ tasks }) {
+  const act = tasks.filter(t => !t.isDeleted);
+  const data = STATUSES.map(s => ({ ...s, val: act.filter(t => t.status === s.name).length })).filter(s => s.val > 0);
+  const total = act.length;
 
   return (
-    <div className="space-y-6">
-      {/* Filters */}
-      <div className="bg-white p-6 rounded-2xl border border-gray-100 flex flex-wrap gap-4 items-end shadow-sm">
-        <div className="w-48">
-          <label className="block text-xs font-medium text-gray-500 mb-1.5">ประจำเดือน</label>
-          <input 
-            type="month" 
-            value={selectedMonth} 
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="w-full border border-gray-200 rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C5A059]/30 focus:border-[#C5A059] transition-all bg-gray-50/50"
-          />
-        </div>
-        <div className="w-48">
-          <label className="block text-xs font-medium text-gray-500 mb-1.5">ค้นหาใบงาน</label>
-          <div className="relative">
-            <Search className="absolute left-3 top-3 text-gray-400" size={16} strokeWidth={2} />
-            <input 
-              type="text" 
-              placeholder="ระบุเลขที่..." 
-              value={searchId}
-              onChange={(e) => setSearchId(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl p-2.5 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-[#C5A059]/30 focus:border-[#C5A059] transition-all bg-gray-50/50"
-            />
-          </div>
-        </div>
-        <div className="w-48">
-          <label className="block text-xs font-medium text-gray-500 mb-1.5">โครงการ</label>
-          <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)} className="w-full border border-gray-200 rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C5A059]/30 focus:border-[#C5A059] transition-all bg-gray-50/50 text-gray-700">
-            <option value="">ทั้งหมด</option>
-            {[...new Set(activeTasks.map(t => t.project))].map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
-        <div className="w-48">
-          <label className="block text-xs font-medium text-gray-500 mb-1.5">บริษัท/ร้านค้า</label>
-          <select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)} className="w-full border border-gray-200 rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C5A059]/30 focus:border-[#C5A059] transition-all bg-gray-50/50 text-gray-700">
-            <option value="">ทั้งหมด</option>
-            {[...new Set(activeTasks.map(t => t.company))].map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <div className="w-48">
-          <label className="block text-xs font-medium text-gray-500 mb-1.5">สถานะ</label>
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full border border-gray-200 rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C5A059]/30 focus:border-[#C5A059] transition-all bg-gray-50/50 text-gray-700">
-            <option value="">ทั้งหมด</option>
-            {STATUSES.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-          </select>
-        </div>
-      </div>
-
+    <div className="space-y-6 animate-in fade-in duration-700">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Pie Chart Card */}
-        <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm lg:col-span-1 flex flex-col items-center">
-          <h3 className="text-sm font-medium text-gray-500 mb-8 w-full text-left">สัดส่วนสถานะงาน</h3>
-          
-          <div className="w-full flex flex-col items-center">
-            {totalTasks > 0 ? (
-              <div className="relative w-48 h-48 mb-8">
-                <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90">
-                  <circle r="16" cx="16" cy="16" fill="transparent" stroke="#F3F4F6" strokeWidth="32" />
-                  {pieData.reduce((acc, slice, index) => {
-                    const dashArray = (slice.value / totalTasks) * 100;
-                    const dashOffset = acc.offset;
-                    acc.elements.push(
-                      <circle
-                        key={index}
-                        r="16" cx="16" cy="16"
-                        fill="transparent"
-                        stroke={slice.color}
-                        strokeWidth="32"
-                        strokeDasharray={`${dashArray} 100`}
-                        strokeDashoffset={`-${dashOffset}`}
-                        className="transition-all duration-1000 ease-out"
-                      />
-                    );
-                    acc.offset += dashArray;
-                    return acc;
-                  }, { elements: [], offset: 0 }).elements}
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="bg-white rounded-full w-32 h-32 flex flex-col items-center justify-center shadow-sm border border-gray-50">
-                    <span className="text-3xl font-light text-[#003366]">{totalTasks}</span>
-                    <span className="text-[10px] font-medium text-gray-400 uppercase tracking-widest mt-1">Total</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-               <div className="h-48 flex items-center justify-center text-gray-400 text-sm w-full bg-gray-50 rounded-full mb-8">ไม่มีข้อมูล</div>
-            )}
-            
-            <div className="w-full space-y-3">
-              {pieData.map(s => (
-                <div key={s.id} className="flex justify-between items-center group">
-                  <div className="flex items-center space-x-3">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }}></span>
-                    <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">{s.name}</span>
-                  </div>
-                  <span className="font-medium text-gray-900 text-sm">{s.value}</span>
-                </div>
-              ))}
+        {/* Chart Card */}
+        <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col items-center">
+          <h4 className="w-full text-sm font-bold text-gray-400 mb-8 uppercase tracking-widest text-center md:text-left">ภาพรวมสถานะ</h4>
+          <div className="relative w-44 h-44 mb-8">
+            <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90">
+              <circle r="16" cx="16" cy="16" fill="transparent" stroke="#F8F9FA" strokeWidth="32" />
+              {data.reduce((acc, s) => {
+                const dash = (s.val / (total || 1)) * 100;
+                const off = acc.off;
+                acc.el.push(<circle key={s.id} r="16" cx="16" cy="16" fill="transparent" stroke={s.color} strokeWidth="32" strokeDasharray={`${dash} 100`} strokeDashoffset={`-${off}`} className="transition-all duration-1000" />);
+                acc.off += dash;
+                return acc;
+              }, { el: [], off: 0 }).el}
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-4xl font-bold text-[#003366]">{total}</span>
+              <span className="text-[10px] font-bold text-gray-300 tracking-widest">TOTAL</span>
             </div>
           </div>
+          <div className="w-full grid grid-cols-2 gap-3">
+            {data.map(s => (
+              <div key={s.id} className="flex flex-col p-3 bg-gray-50 rounded-2xl">
+                <span className="text-[9px] font-bold text-gray-400 uppercase truncate">{s.name}</span>
+                <span className="text-lg font-bold text-[#003366]">{s.val}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Task List (Read Only) */}
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm lg:col-span-2 flex flex-col overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-white">
-            <h3 className="text-sm font-medium text-gray-500">รายการใบงาน</h3>
-            <span className="text-xs font-medium bg-gray-100 text-gray-600 px-3 py-1 rounded-full">{filteredTasks.length} รายการ</span>
+        {/* Recent List */}
+        <div className="lg:col-span-2 bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 md:p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest">ใบงานล่าสุด</h4>
+            <span className="text-[10px] bg-white px-3 py-1 rounded-full border border-gray-100 text-gray-400">{act.length} รายการ</span>
           </div>
-          <div className="overflow-x-auto flex-1">
-            <table className="w-full text-left whitespace-nowrap">
-              <thead>
-                <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
-                  <th className="py-4 px-6 font-medium">เลขที่ใบงาน</th>
-                  <th className="py-4 px-6 font-medium">โครงการ</th>
-                  <th className="py-4 px-6 font-medium">สถานะ</th>
-                  <th className="py-4 px-6 font-medium">วันนัดหมาย</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filteredTasks.length > 0 ? filteredTasks.map(task => {
-                  const statusObj = STATUSES.find(s => s.name === task.status);
-                  return (
-                    <tr key={task.id} className="hover:bg-gray-50/50 transition-colors group">
-                      <td className="py-4 px-6 text-sm font-medium text-[#003366]">{task.taskNo}</td>
-                      <td className="py-4 px-6 text-sm text-gray-600">{task.project}</td>
-                      <td className="py-4 px-6">
-                         <span className="px-3 py-1 text-xs font-medium rounded-full inline-block" 
-                               style={{ backgroundColor: statusObj?.bgColor || '#f3f4f6', color: statusObj?.color || '#374151' }}>
-                           {task.status}
-                         </span>
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-500">{task.aptDate || '-'}</td>
-                    </tr>
-                  )
-                }) : (
-                  <tr>
-                    <td colSpan="4" className="py-16 text-center">
-                      <div className="flex flex-col items-center justify-center text-gray-400">
-                         <FileText size={32} className="mb-3 opacity-30" strokeWidth={1} />
-                         <p className="text-sm">ไม่พบรายการใบงาน</p>
+          <div className="flex-1 overflow-auto max-h-[400px]">
+             {act.length > 0 ? (
+               <div className="divide-y divide-gray-50">
+                 {act.slice(0, 8).map(t => (
+                    <div key={t.id} className="p-4 md:p-6 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                      <div className="flex flex-col min-w-0 mr-4">
+                        <span className="font-bold text-[#003366] text-sm md:text-base">{t.taskNo}</span>
+                        <span className="text-xs text-gray-400 truncate">{t.project}</span>
                       </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                      <div className="flex flex-col items-end shrink-0">
+                         <span className="px-3 py-1 rounded-full text-[9px] font-bold" style={{backgroundColor: STATUSES.find(s=>s.name===t.status)?.bgColor, color: STATUSES.find(s=>s.name===t.status)?.color}}>
+                           {t.status}
+                         </span>
+                         <span className="text-[10px] text-gray-300 mt-1">{t.area}</span>
+                      </div>
+                    </div>
+                 ))}
+               </div>
+             ) : (
+               <div className="flex-1 flex flex-col items-center justify-center py-20 text-gray-300">
+                  <FileText size={48} className="mb-2 opacity-20"/>
+                  <p className="text-sm">ไม่มีข้อมูลใบงาน</p>
+               </div>
+             )}
           </div>
         </div>
       </div>
@@ -532,338 +351,149 @@ function DashboardView({ tasks }) {
   );
 }
 
-// 2. Task Form View (Add/Edit)
-function TaskFormView({ settings, onSave, onSuccess, initialData = null, onCancel = null }) {
-  const [formData, setFormData] = useState(initialData || {
-    taskNo: '', project: '', company: '', area: '', status: STATUSES[0].name, aptDate: '', payDate: '', details: ''
-  });
-  const [errors, setErrors] = useState({});
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const newErrors = {};
-    if (!formData.taskNo) newErrors.taskNo = 'กรุณาระบุเลขที่ใบงาน';
-    if (!formData.project) newErrors.project = 'กรุณาเลือกโครงการ';
-    if (!formData.company) newErrors.company = 'กรุณาเลือกบริษัท/ร้านค้า';
-    if (!formData.area) newErrors.area = 'กรุณาเลือกพื้นที่';
-
-    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
-    await onSave(formData, !!initialData, initialData?.id);
-    if (onSuccess) onSuccess();
-  };
-
+function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = null }) {
+  const [d, setD] = useState(initialData || { taskNo: '', project: '', company: '', area: AREAS[0], status: STATUSES[0].name, aptDate: '', payDate: '', details: '' });
+  const sub = async (e) => { e.preventDefault(); await onSave(d, !!initialData, initialData?.id); onSuccess(); };
   return (
-    <div className="bg-white border border-gray-100 shadow-sm max-w-4xl mx-auto rounded-2xl overflow-hidden">
-      <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white">
-        <h2 className="text-lg font-medium text-[#003366]">
-          {initialData ? 'แก้ไขใบงาน' : 'เพิ่มใบงานใหม่'}
-        </h2>
+    <form onSubmit={sub} className="bg-white p-6 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-6 max-w-3xl mx-auto animate-in slide-in-from-bottom-2 duration-500 mb-20">
+      <div className="flex items-center space-x-3 mb-4">
+        <div className="p-3 bg-[#003366] text-white rounded-2xl"><PlusCircle size={20}/></div>
+        <h3 className="font-bold text-xl">{initialData ? 'แก้ไขข้อมูลใบงาน' : 'เพิ่มใบงานใหม่'}</h3>
       </div>
-      
-      <form onSubmit={handleSubmit} className="p-8 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">เลขที่ใบงาน <span className="text-red-400">*</span></label>
-            <input type="text" name="taskNo" value={formData.taskNo} onChange={handleChange} 
-              className={`w-full p-3 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C5A059]/30 transition-colors bg-gray-50/50 ${errors.taskNo ? 'border-red-300 focus:border-red-400 focus:ring-red-200' : 'border-gray-200 focus:border-[#C5A059]'}`} 
-              placeholder="เช่น VT-202604001"
-            />
-            {errors.taskNo && <p className="text-red-500 text-xs mt-1.5">{errors.taskNo}</p>}
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <Field label="เลขที่ใบงาน"><input required className="input-style" value={d.taskNo} onChange={e=>setD({...d, taskNo: e.target.value})}/></Field>
+        <Field label="โครงการ"><select required className="input-style" value={d.project} onChange={e=>setD({...d, project: e.target.value})}><option value="">เลือกโครงการ</option>{settings.projects.map(p=><option key={p} value={p}>{p}</option>)}</select></Field>
+        <Field label="บริษัท/ร้านค้า"><select required className="input-style" value={d.company} onChange={e=>setD({...d, company: e.target.value})}><option value="">เลือกร้านค้า</option>{settings.companies.map(c=><option key={c} value={c}>{c}</option>)}</select></Field>
+        <Field label="พื้นที่"><select className="input-style" value={d.area} onChange={e=>setD({...d, area: e.target.value})}>{AREAS.map(a=><option key={a} value={a}>{a}</option>)}</select></Field>
+        <div className="md:col-span-2"><Field label="สถานะการดำเนินงาน"><select className="input-style" value={d.status} onChange={e=>setD({...d, status: e.target.value})}>{STATUSES.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}</select></Field></div>
+        <Field label="วันนัดหมาย"><input type="date" className="input-style" value={d.aptDate} onChange={e=>setD({...d, aptDate: e.target.value})}/></Field>
+        <Field label="วันทำจ่าย"><input type="date" className="input-style" value={d.payDate} onChange={e=>setD({...d, payDate: e.target.value})}/></Field>
+        <div className="md:col-span-2"><Field label="รายละเอียดเพิ่มเติม"><textarea rows="3" className="input-style resize-none" value={d.details} onChange={e=>setD({...d, details: e.target.value})}></textarea></Field></div>
+      </div>
+      <div className="flex flex-col md:flex-row justify-end gap-3 pt-4">
+        {onCancel && <button type="button" onClick={onCancel} className="px-8 py-4 rounded-2xl text-gray-400 font-bold hover:bg-gray-50 transition-colors order-2 md:order-1">ยกเลิก</button>}
+        <button type="submit" className="bg-[#003366] text-white px-10 py-4 rounded-2xl font-bold shadow-xl hover:shadow-[#003366]/20 transition-all active:scale-95 order-1 md:order-2">บันทึกข้อมูล</button>
+      </div>
+      <style>{`.input-style { @apply w-full p-4 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] transition-all text-sm font-medium text-gray-700; }`}</style>
+    </form>
+  );
+}
 
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">โครงการ <span className="text-red-400">*</span></label>
-            <select name="project" value={formData.project} onChange={handleChange} 
-              className={`w-full p-3 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C5A059]/30 transition-colors bg-gray-50/50 text-gray-700 ${errors.project ? 'border-red-300' : 'border-gray-200 focus:border-[#C5A059]'}`}>
-              <option value="">เลือกโครงการ</option>
-              {settings.projects.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">บริษัท/ร้านค้า <span className="text-red-400">*</span></label>
-            <select name="company" value={formData.company} onChange={handleChange} 
-              className={`w-full p-3 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C5A059]/30 transition-colors bg-gray-50/50 text-gray-700 ${errors.company ? 'border-red-300' : 'border-gray-200 focus:border-[#C5A059]'}`}>
-              <option value="">เลือกร้านค้า</option>
-              {settings.companies.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">พื้นที่ <span className="text-red-400">*</span></label>
-            <select name="area" value={formData.area} onChange={handleChange} 
-              className={`w-full p-3 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C5A059]/30 transition-colors bg-gray-50/50 text-gray-700 ${errors.area ? 'border-red-300' : 'border-gray-200 focus:border-[#C5A059]'}`}>
-              <option value="">เลือกพื้นที่</option>
-              {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
-            </select>
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-gray-500 mb-2">สถานะงาน</label>
-            <select name="status" value={formData.status} onChange={handleChange} 
-              className="w-full p-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:border-[#C5A059] focus:ring-[#C5A059]/30 transition-colors bg-gray-50/50 text-gray-700">
-              {STATUSES.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">วันนัดหมายเข้าซ่อม</label>
-            <input type="date" name="aptDate" value={formData.aptDate} onChange={handleChange} 
-              className="w-full p-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:border-[#C5A059] focus:ring-[#C5A059]/30 transition-colors bg-gray-50/50 text-gray-700" />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">วันที่ทำจ่าย</label>
-            <input type="date" name="payDate" value={formData.payDate} onChange={handleChange} 
-              className="w-full p-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:border-[#C5A059] focus:ring-[#C5A059]/30 transition-colors bg-gray-50/50 text-gray-700" />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-gray-500 mb-2">รายละเอียดงาน</label>
-            <textarea name="details" value={formData.details} onChange={handleChange} rows="4"
-              className="w-full p-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:border-[#C5A059] focus:ring-[#C5A059]/30 transition-colors bg-gray-50/50 text-gray-700 resize-none"
-              placeholder="ระบุรายละเอียดเพิ่มเติม..."
-            ></textarea>
-          </div>
-        </div>
-
-        <div className="flex justify-end space-x-3 pt-6 mt-6 border-t border-gray-50">
-          {onCancel && (
-            <button type="button" onClick={onCancel} className="px-6 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-              ยกเลิก
-            </button>
-          )}
-          <button type="submit" className="px-6 py-2.5 text-sm font-medium text-white bg-[#003366] rounded-xl hover:bg-[#002244] transition-colors shadow-sm flex items-center">
-            บันทึกข้อมูล
-          </button>
-        </div>
-      </form>
+function Field({ label, children }) {
+  return (
+    <div className="space-y-2">
+      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">{label}</label>
+      {children}
     </div>
   );
 }
 
-// 3. Task Management View
-function ManagementView({ tasks, settings, onSave, onDelete }) {
-  const [filterArea, setFilterArea] = useState('');
-  const [filterProject, setFilterProject] = useState('');
-  const [editingTask, setEditingTask] = useState(null);
-  const [deletingTask, setDeletingTask] = useState(null);
-  const [deleteReason, setDeleteReason] = useState('');
-  const [deleteError, setDeleteError] = useState('');
+function Management({ tasks, settings, onSave, onDelete }) {
+  const [edit, setEdit] = useState(null);
+  const [search, setSearch] = useState('');
+  
+  const filtered = useMemo(() => {
+    return tasks.filter(t => !t.isDeleted && (t.taskNo.toLowerCase().includes(search.toLowerCase()) || t.project.toLowerCase().includes(search.toLowerCase())));
+  }, [tasks, search]);
 
-  const activeTasks = tasks.filter(t => !t.isDeleted);
-  const filteredTasks = activeTasks.filter(task => {
-    return (filterArea ? task.area === filterArea : true) && (filterProject ? task.project === filterProject : true);
-  });
-
-  const handleDeleteConfirm = () => {
-    if (!deleteReason.trim()) { setDeleteError('กรุณาระบุเหตุผลในการลบ'); return; }
-    onDelete(deletingTask.id, deleteReason);
-    setDeletingTask(null); setDeleteReason(''); setDeleteError('');
-  };
-
-  const exportToCSV = () => {
-    if (!window.Papa) { alert("Library not ready!"); return; }
-    const csv = window.Papa.unparse(activeTasks.map(t => ({
-      'เลขที่ใบงาน': t.taskNo, 'โครงการ': t.project, 'บริษัท': t.company, 'พื้นที่': t.area,
-      'สถานะ': t.status, 'วันนัดหมาย': t.aptDate, 'วันที่ทำจ่าย': t.payDate, 'รายละเอียด': t.details
-    })));
-    const blob = new Blob(["\ufeff"+csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `VTrack_Export_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
-  };
-
-  if (editingTask) return <TaskFormView settings={settings} initialData={editingTask} onSave={(data, isEdit, id) => { onSave(data, isEdit, id); setEditingTask(null); }} onCancel={() => setEditingTask(null)} />;
+  if (edit) return <TaskForm settings={settings} initialData={edit} onSave={onSave} onSuccess={()=>setEdit(null)} onCancel={()=>setEdit(null)} />;
 
   return (
-    <div className="space-y-6">
-      {/* Controls */}
-      <div className="flex flex-wrap justify-between items-center bg-white px-6 py-4 border border-gray-100 shadow-sm rounded-2xl">
-        <div className="flex flex-wrap gap-4 items-center w-full md:w-auto">
-          <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)} className="border border-gray-200 text-sm rounded-xl p-2.5 min-w-[140px] focus:outline-none focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059]/30 bg-gray-50/50 text-gray-700">
-            <option value="">ทุกพื้นที่</option>
-            {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
-          <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)} className="border border-gray-200 text-sm rounded-xl p-2.5 min-w-[180px] focus:outline-none focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059]/30 bg-gray-50/50 text-gray-700">
-            <option value="">ทุกโครงการ</option>
-            {settings.projects.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
-        
-        <button onClick={exportToCSV} className="mt-4 md:mt-0 px-5 py-2.5 text-sm font-medium bg-white text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center shadow-sm">
-          <Download size={16} className="mr-2 text-gray-400" /> ส่งออกข้อมูล
-        </button>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center relative">
+        <Search size={18} className="absolute left-7 text-gray-300" />
+        <input placeholder="ค้นหาด้วยเลขที่ใบงาน หรือชื่อโครงการ..." className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm" value={search} onChange={e=>setSearch(e.target.value)} />
       </div>
 
-      {/* Table */}
-      <div className="bg-white border border-gray-100 shadow-sm rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left whitespace-nowrap">
-            <thead>
-              <tr className="bg-white border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
-                <th className="py-4 px-6 font-medium">เลขที่ใบงาน</th>
-                <th className="py-4 px-6 font-medium">โครงการ</th>
-                <th className="py-4 px-6 font-medium">พื้นที่</th>
-                <th className="py-4 px-6 font-medium">สถานะ</th>
-                <th className="py-4 px-6 font-medium text-right">จัดการ</th>
-              </tr>
+      <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
+        {/* Table for Desktop */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-400 text-[10px] uppercase font-bold tracking-widest">
+              <tr><th className="px-8 py-5">เลขที่ใบงาน</th><th className="px-8 py-5">โครงการ</th><th className="px-8 py-5">สถานะ</th><th className="px-8 py-5 text-right">จัดการ</th></tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredTasks.length > 0 ? filteredTasks.map(task => {
-                const statusObj = STATUSES.find(s => s.name === task.status);
-                return (
-                  <tr key={task.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="py-4 px-6 text-sm font-medium text-[#003366]">{task.taskNo}</td>
-                    <td className="py-4 px-6 text-sm text-gray-600">{task.project}</td>
-                    <td className="py-4 px-6 text-sm text-gray-500">{task.area}</td>
-                    <td className="py-4 px-6">
-                       <span className="px-3 py-1 text-xs font-medium rounded-full inline-block" 
-                             style={{ backgroundColor: statusObj?.bgColor || '#f3f4f6', color: statusObj?.color || '#374151' }}>
-                         {task.status}
-                       </span>
-                    </td>
-                    <td className="py-4 px-6 flex justify-end space-x-2">
-                      <button onClick={() => setEditingTask(task)} className="p-2 text-gray-400 hover:text-[#C5A059] hover:bg-[#C5A059]/10 rounded-lg transition-colors" title="แก้ไข">
-                        <Edit size={16} strokeWidth={1.5} />
-                      </button>
-                      <button onClick={() => setDeletingTask(task)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="ลบ">
-                        <Trash2 size={16} strokeWidth={1.5} />
-                      </button>
-                    </td>
-                  </tr>
-                )
-              }) : (
-                <tr>
-                  <td colSpan="5" className="py-16 text-center text-gray-400">
-                    <div className="flex flex-col items-center">
-                       <FileText size={32} className="mb-3 opacity-30" strokeWidth={1} />
-                       <p className="text-sm">ไม่มีข้อมูลใบงาน</p>
-                    </div>
+              {filtered.map(t=>(
+                <tr key={t.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-8 py-6 font-bold text-[#003366]">{t.taskNo}</td>
+                  <td className="px-8 py-6 text-gray-500 truncate max-w-[200px]">{t.project}</td>
+                  <td className="px-8 py-6"><StatusTag label={t.status}/></td>
+                  <td className="px-8 py-6 text-right space-x-3">
+                    <button onClick={()=>setEdit(t)} className="text-gray-300 hover:text-[#C5A059] transition-colors"><Edit size={18}/></button>
+                    <button onClick={()=>onDelete(t.id, 'User Delete')} className="text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
                   </td>
                 </tr>
-              )}
+              ))}
             </tbody>
           </table>
         </div>
-      </div>
 
-      {/* Delete Modal */}
-      {deletingTask && (
-        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-xl transform transition-all">
-            <div className="p-6">
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4 mx-auto">
-                <AlertCircle size={24} className="text-red-500" strokeWidth={1.5} />
+        {/* Cards for Mobile */}
+        <div className="md:hidden divide-y divide-gray-50">
+          {filtered.map(t => (
+            <div key={t.id} className="p-5 space-y-3">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="text-sm font-bold text-[#003366]">{t.taskNo}</div>
+                  <div className="text-[11px] text-gray-400 mt-0.5">{t.project}</div>
+                </div>
+                <StatusTag label={t.status} />
               </div>
-              <h3 className="text-lg font-medium text-center text-gray-900 mb-2">ยืนยันการลบใบงาน</h3>
-              <p className="text-sm text-center text-gray-500 mb-6">
-                คุณกำลังจะลบ <strong>{deletingTask.taskNo}</strong>
-              </p>
-              
-              <div>
-                <textarea 
-                  value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)}
-                  className={`w-full p-3 text-sm border rounded-xl focus:outline-none focus:ring-2 transition-colors resize-none ${deleteError ? 'border-red-300 focus:ring-red-200' : 'border-gray-200 focus:border-red-400 focus:ring-red-100'} bg-gray-50/50`}
-                  rows="3" placeholder="โปรดระบุเหตุผลในการลบ..."
-                ></textarea>
-                {deleteError && <p className="text-red-500 text-xs mt-1.5 px-1">{deleteError}</p>}
+              <div className="flex justify-between items-center pt-2">
+                <div className="text-[10px] text-gray-300 uppercase font-bold tracking-wider">{t.area}</div>
+                <div className="flex space-x-4">
+                  <button onClick={()=>setEdit(t)} className="p-2 bg-gray-50 rounded-lg text-gray-400"><Edit size={16}/></button>
+                  <button onClick={()=>onDelete(t.id, 'User Delete')} className="p-2 bg-red-50 rounded-lg text-red-300"><Trash2 size={16}/></button>
+                </div>
               </div>
             </div>
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex space-x-3">
-              <button onClick={() => setDeletingTask(null)} className="flex-1 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">ยกเลิก</button>
-              <button onClick={handleDeleteConfirm} className="flex-1 py-2.5 text-sm font-medium text-white bg-red-500 rounded-xl hover:bg-red-600 transition-colors shadow-sm">ลบใบงาน</button>
-            </div>
-          </div>
+          ))}
         </div>
-      )}
+
+        {filtered.length === 0 && (
+          <div className="py-20 text-center text-gray-300">
+            <FileText size={40} className="mx-auto mb-2 opacity-20"/>
+            <p className="text-xs">ไม่พบข้อมูลที่ค้นหา</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-// 4. Calendar View
-function CalendarAppView({ tasks }) {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [filterArea, setFilterArea] = useState('');
-  const activeTasks = tasks.filter(t => !t.isDeleted && t.aptDate);
-  const filteredTasks = activeTasks.filter(task => filterArea ? task.area === filterArea : true);
+function StatusTag({ label }) {
+  const s = STATUSES.find(x => x.name === label);
+  return <span className="px-3 py-1 rounded-full text-[9px] font-bold whitespace-nowrap" style={{backgroundColor: s?.bgColor, color: s?.color}}>{label}</span>;
+}
 
-  const getDaysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
-  const getFirstDayOfMonth = (y, m) => new Date(y, m, 1).getDay();
-
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  const daysInMonth = getDaysInMonth(year, month);
-  const firstDay = getFirstDayOfMonth(year, month);
-
-  const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
-  const dayNames = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
-
-  const grid = [];
-  for (let i = 0; i < firstDay; i++) grid.push(null);
-  for (let i = 1; i <= daysInMonth; i++) grid.push(i);
+function CalendarView({ tasks }) {
+  const [now, setNow] = useState(new Date());
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const daysIn = new Date(y, m + 1, 0).getDate();
+  const first = new Date(y, m, 1).getDay();
+  const grid = [...Array(first).fill(null), ...Array(daysIn).keys()].map(i => i === null ? null : i + 1);
 
   return (
-    <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-8 flex flex-col h-full min-h-[600px]">
+    <div className="bg-white p-5 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100 animate-in fade-in duration-700">
       <div className="flex justify-between items-center mb-8">
-        <div className="flex items-center space-x-4">
-          <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-500 transition-colors"><ChevronLeft size={20} strokeWidth={1.5} /></button>
-          <h2 className="text-lg font-medium text-[#003366] min-w-[160px] text-center">
-            {monthNames[month]} {year + 543}
-          </h2>
-          <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-500 transition-colors"><ChevronRight size={20} strokeWidth={1.5} /></button>
-        </div>
-        
-        <div>
-          <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)} className="border border-gray-200 text-sm rounded-xl p-2.5 focus:outline-none focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059]/30 bg-gray-50/50 text-gray-700">
-            <option value="">ทุกพื้นที่</option>
-            {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
-        </div>
+        <button onClick={()=>setNow(new Date(y, m-1, 1))} className="p-3 bg-gray-50 rounded-2xl text-gray-400 hover:bg-gray-100"><ChevronLeft size={18}/></button>
+        <h4 className="font-bold text-[#003366] md:text-lg">{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(now)}</h4>
+        <button onClick={()=>setNow(new Date(y, m+1, 1))} className="p-3 bg-gray-50 rounded-2xl text-gray-400 hover:bg-gray-100"><ChevronRight size={18}/></button>
       </div>
-
-      <div className="grid grid-cols-7 gap-px bg-gray-100 border border-gray-100 flex-1 rounded-xl overflow-hidden shadow-inner">
-        {dayNames.map(day => (
-          <div key={day} className="bg-white p-3 text-center text-xs font-medium text-gray-400">
-            {day}
-          </div>
-        ))}
-        
-        {grid.map((day, idx) => {
-          if (!day) return <div key={`empty-${idx}`} className="bg-gray-50/50 min-h-[100px]"></div>;
-          
-          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const dayTasks = filteredTasks.filter(t => t.aptDate === dateStr);
-          const isToday = dateStr === new Date().toISOString().split('T')[0];
-
+      <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-[1.5rem] overflow-hidden border border-gray-100">
+        {['อา','จ','อ','พ','พฤ','ศ','ส'].map(d=><div key={d} className="bg-white p-3 text-center text-[10px] text-gray-300 uppercase font-bold">{d}</div>)}
+        {grid.map((d, i) => {
+          const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+          const tks = tasks.filter(t => !t.isDeleted && t.aptDate === dateStr);
+          const isToday = new Date().toISOString().split('T')[0] === dateStr;
           return (
-            <div key={day} className={`bg-white min-h-[100px] p-2 hover:bg-gray-50/50 transition-colors relative flex flex-col ${isToday ? 'ring-inset ring-1 ring-[#003366]' : ''}`}>
-              <div className={`text-sm mb-2 flex justify-between items-center px-1 ${isToday ? 'text-[#003366] font-medium' : 'text-gray-500 font-light'}`}>
-                {day}
-                {isToday && <span className="w-1.5 h-1.5 bg-[#C5A059] rounded-full"></span>}
-              </div>
-              <div className="space-y-1.5 overflow-y-auto flex-1 custom-scrollbar pr-1">
-                {dayTasks.map(task => {
-                  const statusObj = STATUSES.find(s => s.name === task.status);
-                  return (
-                    <div key={task.id} 
-                         className="text-[11px] px-2 py-1 rounded-md truncate cursor-help border border-transparent hover:border-gray-200 transition-colors" 
-                         style={{ backgroundColor: statusObj?.bgColor || '#f3f4f6', color: statusObj?.color || '#374151' }}
-                         title={`${task.taskNo} - ${task.project} (${task.status})`}
-                    >
-                      {task.taskNo}
-                    </div>
-                  );
-                })}
+            <div key={i} className={`bg-white min-h-[70px] md:min-h-[100px] p-1.5 md:p-3 transition-colors ${d ? 'hover:bg-gray-50' : 'bg-gray-50/30'}`}>
+              {d && <div className={`text-[10px] md:text-xs mb-1 font-bold ${isToday ? 'text-[#C5A059]' : 'text-gray-300'}`}>{d}</div>}
+              <div className="space-y-1">
+                {tks.map(t=>(
+                  <div key={t.id} className="text-[8px] bg-[#003366] text-white p-1 rounded-md truncate shadow-sm" title={t.taskNo}>{t.taskNo}</div>
+                ))}
               </div>
             </div>
           );
@@ -873,134 +503,101 @@ function CalendarAppView({ tasks }) {
   );
 }
 
-// 5. Settings & Import View
-function SettingsView({ settings, updateSettings, tasks, onSave }) {
-  const [newProject, setNewProject] = useState('');
-  const [newCompany, setNewCompany] = useState('');
-  const [importStatus, setImportStatus] = useState('');
+function SettingsPanel({ settings, updateSettings, tasks, onSave }) {
+  const [p, setP] = useState('');
+  const [c, setC] = useState('');
+  const [st, setSt] = useState('');
 
-  const handleAddProject = () => {
-    if (!newProject.trim() || settings.projects.includes(newProject.trim())) return;
-    updateSettings({ ...settings, projects: [...settings.projects, newProject.trim()] });
-    setNewProject('');
-  };
-  const handleRemoveProject = (proj) => updateSettings({ ...settings, projects: settings.projects.filter(p => p !== proj) });
-
-  const handleAddCompany = () => {
-    if (!newCompany.trim() || settings.companies.includes(newCompany.trim())) return;
-    updateSettings({ ...settings, companies: [...settings.companies, newCompany.trim()] });
-    setNewCompany('');
-  };
-  const handleRemoveCompany = (comp) => updateSettings({ ...settings, companies: settings.companies.filter(c => c !== comp) });
+  const addP = () => { if(!p||settings.projects.includes(p)) return; updateSettings({...settings, projects: [...settings.projects, p]}); setP(''); };
+  const addC = () => { if(!c||settings.companies.includes(c)) return; updateSettings({...settings, companies: [...settings.companies, c]}); setC(''); };
 
   const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!window.Papa) { setImportStatus('ระบบประมวลผลไฟล์ยังไม่พร้อมใช้งาน'); return; }
-    
-    setImportStatus('กำลังประมวลผล...');
-    window.Papa.parse(file, {
+    const f = e.target.files[0];
+    if (!f || !window.Papa) { setSt('Library Error'); return; }
+    setSt('กำลังนำเข้าข้อมูล...');
+    window.Papa.parse(f, {
       header: true, skipEmptyLines: true,
-      complete: async (results) => {
-        const rows = results.data;
-        let successCount = 0;
-        for (const row of rows) {
-          const taskNo = row['เลขที่ใบงาน'] || row['taskNo'];
-          if (!taskNo) continue;
-          const taskData = {
-            taskNo, project: row['โครงการ'] || row['project'] || '', company: row['บริษัท'] || row['บริษัท/ร้านค้า'] || row['company'] || '',
-            area: row['พื้นที่'] || row['area'] || AREAS[0], status: row['สถานะ'] || row['status'] || STATUSES[0].name,
-            aptDate: row['วันนัดหมาย'] || row['aptDate'] || '', payDate: row['วันที่ทำจ่าย'] || row['payDate'] || '', details: row['รายละเอียด'] || row['details'] || ''
-          };
-          if (!settings.projects.includes(taskData.project) && taskData.project) settings.projects.push(taskData.project);
-          if (!settings.companies.includes(taskData.company) && taskData.company) settings.companies.push(taskData.company);
+      complete: async (res) => {
+        const rows = res.data;
+        let count = 0;
+        const newP = [...settings.projects];
+        const newC = [...settings.companies];
 
-          const exist = tasks.find(t => t.taskNo === taskNo && !t.isDeleted);
-          await onSave(taskData, !!exist, exist?.id);
-          successCount++;
+        for (const row of rows) {
+          const getV = (ks) => {
+            const k = Object.keys(row).find(x => ks.includes(x.trim()));
+            return k ? row[k].toString().trim() : '';
+          };
+          const tNo = getV(['เลขที่ใบงาน', 'taskNo', 'Task No', 'เลขที่']);
+          if (!tNo) continue;
+
+          const tData = {
+            taskNo: tNo,
+            project: getV(['โครงการ', 'project', 'Project Name']),
+            company: getV(['บริษัท', 'company', 'ร้านค้า']),
+            area: getV(['พื้นที่', 'area']) || AREAS[0],
+            status: getV(['สถานะ', 'status']) || STATUSES[0].name,
+            aptDate: getV(['วันนัดหมาย', 'aptDate']),
+            payDate: getV(['วันทำจ่าย', 'payDate']),
+            details: getV(['รายละเอียด', 'details'])
+          };
+
+          if (tData.project && !newP.includes(tData.project)) newP.push(tData.project);
+          if (tData.company && !newC.includes(tData.company)) newC.push(tData.company);
+
+          const ex = tasks.find(t => t.taskNo === tNo && !t.isDeleted);
+          await onSave(tData, !!ex, ex?.id);
+          count++;
         }
-        updateSettings({...settings});
-        setImportStatus(`นำเข้าสำเร็จ ${successCount} รายการ`);
-        e.target.value = null;
-        setTimeout(() => setImportStatus(''), 5000);
-      },
-      error: (err) => setImportStatus(`พบข้อผิดพลาด: ${err.message}`)
+        await updateSettings({ projects: newP, companies: newC });
+        setSt(`นำเข้าสำเร็จ ${count} รายการ`);
+      }
     });
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
-      {/* Projects */}
-      <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-6">
-        <h3 className="text-sm font-medium text-gray-500 mb-6 flex items-center">
-          โครงการ
-        </h3>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-500 mb-20">
+      <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col">
+        <h4 className="text-[10px] font-bold text-gray-400 mb-6 uppercase tracking-widest">ข้อมูลโครงการ</h4>
         <div className="flex space-x-2 mb-6">
-          <input 
-            type="text" value={newProject} onChange={(e) => setNewProject(e.target.value)}
-            placeholder="เพิ่มโครงการใหม่..." 
-            className="flex-1 border border-gray-200 rounded-xl p-2.5 text-sm focus:outline-none focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059]/30 bg-gray-50/50"
-            onKeyPress={e => e.key === 'Enter' && handleAddProject()}
-          />
-          <button onClick={handleAddProject} className="px-5 py-2.5 bg-gray-50 text-gray-700 text-sm font-medium border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors">เพิ่ม</button>
+          <input className="flex-1 p-3 bg-gray-50 rounded-xl text-sm border-none focus:ring-1 focus:ring-[#C5A059]" value={p} onChange={e=>setP(e.target.value)} placeholder="ชื่อโครงการ..."/>
+          <button onClick={addP} className="bg-[#003366] text-white px-5 py-3 rounded-xl font-bold text-sm shadow-lg shadow-[#003366]/20">เพิ่ม</button>
         </div>
-        <ul className="space-y-1.5 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-          {settings.projects.map(proj => (
-            <li key={proj} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-xl transition-colors group">
-              <span className="text-sm text-gray-700">{proj}</span>
-              <button onClick={() => handleRemoveProject(proj)} className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><X size={16} strokeWidth={2}/></button>
-            </li>
+        <div className="space-y-1.5 flex-1 overflow-auto max-h-60 pr-2">
+          {settings.projects.map(item => (
+            <div key={item} className="text-xs p-3 bg-gray-50 rounded-xl flex justify-between items-center group">
+              <span className="font-medium text-gray-700">{item}</span>
+              <button onClick={()=>updateSettings({...settings, projects: settings.projects.filter(x=>x!==item)})} className="text-red-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><X size={14}/></button>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
 
-      {/* Companies */}
-      <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-6">
-        <h3 className="text-sm font-medium text-gray-500 mb-6 flex items-center">
-          บริษัท/ร้านค้า
-        </h3>
+      <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col">
+        <h4 className="text-[10px] font-bold text-gray-400 mb-6 uppercase tracking-widest">ข้อมูลร้านค้า</h4>
         <div className="flex space-x-2 mb-6">
-          <input 
-            type="text" value={newCompany} onChange={(e) => setNewCompany(e.target.value)}
-            placeholder="เพิ่มบริษัท/ร้านค้า..." 
-            className="flex-1 border border-gray-200 rounded-xl p-2.5 text-sm focus:outline-none focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059]/30 bg-gray-50/50"
-            onKeyPress={e => e.key === 'Enter' && handleAddCompany()}
-          />
-          <button onClick={handleAddCompany} className="px-5 py-2.5 bg-gray-50 text-gray-700 text-sm font-medium border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors">เพิ่ม</button>
+          <input className="flex-1 p-3 bg-gray-50 rounded-xl text-sm border-none focus:ring-1 focus:ring-[#C5A059]" value={c} onChange={e=>setC(e.target.value)} placeholder="ชื่อร้านค้า..."/>
+          <button onClick={addC} className="bg-[#003366] text-white px-5 py-3 rounded-xl font-bold text-sm shadow-lg shadow-[#003366]/20">เพิ่ม</button>
         </div>
-        <ul className="space-y-1.5 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-          {settings.companies.map(comp => (
-            <li key={comp} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-xl transition-colors group">
-              <span className="text-sm text-gray-700">{comp}</span>
-              <button onClick={() => handleRemoveCompany(comp)} className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><X size={16} strokeWidth={2}/></button>
-            </li>
+        <div className="space-y-1.5 flex-1 overflow-auto max-h-60 pr-2">
+          {settings.companies.map(item => (
+            <div key={item} className="text-xs p-3 bg-gray-50 rounded-xl flex justify-between items-center group">
+              <span className="font-medium text-gray-700">{item}</span>
+              <button onClick={()=>updateSettings({...settings, companies: settings.companies.filter(x=>x!==item)})} className="text-red-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><X size={14}/></button>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
 
-      {/* Import Data */}
-      <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-8 md:col-span-2">
-        <h3 className="text-sm font-medium text-gray-500 mb-2">
-          นำเข้าข้อมูล (Import)
-        </h3>
-        <p className="text-xs text-gray-400 mb-6">อัปโหลดไฟล์ .csv (คอลัมน์: เลขที่ใบงาน, โครงการ, บริษัท, พื้นที่, สถานะ, วันนัดหมาย, วันที่ทำจ่าย, รายละเอียด)</p>
-        
-        <div className="border border-dashed border-gray-300 bg-gray-50/50 rounded-2xl p-10 text-center hover:bg-gray-50 transition-colors cursor-pointer relative group">
-          <input 
-            type="file" accept=".csv" onChange={handleFileUpload}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-          />
-          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-gray-100 group-hover:border-[#C5A059]/30 transition-colors">
-            <Upload size={20} className="text-gray-400 group-hover:text-[#C5A059] transition-colors" strokeWidth={1.5} />
-          </div>
-          <p className="text-sm text-gray-600 font-medium group-hover:text-[#003366] transition-colors">คลิกเพื่อเลือกไฟล์ หรือ ลากไฟล์มาวางที่นี่</p>
+      <div className="lg:col-span-2 bg-white p-6 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
+        <h4 className="text-[10px] font-bold text-gray-400 mb-6 uppercase tracking-widest text-center">อัปโหลดไฟล์ข้อมูล (CSV)</h4>
+        <div className="border-2 border-dashed border-gray-100 rounded-[2rem] p-10 text-center hover:bg-gray-50/50 relative cursor-pointer group transition-colors">
+          <input type="file" accept=".csv" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+          <div className="w-16 h-16 bg-[#C5A059]/10 text-[#C5A059] rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform"><Upload size={24}/></div>
+          <p className="text-sm font-bold text-gray-500">แตะเพื่อเลือกไฟล์ หรือลากไฟล์มาวาง</p>
+          <p className="text-[10px] text-gray-300 mt-2">คอลัมน์แนะนำ: เลขที่ใบงาน, โครงการ, บริษัท, พื้นที่, สถานะ</p>
         </div>
-        
-        {importStatus && (
-          <div className={`mt-4 p-3 rounded-xl text-xs font-medium text-center ${importStatus.includes('สำเร็จ') ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-[#003366]/5 text-[#003366] border border-[#003366]/10'}`}>
-            {importStatus}
-          </div>
-        )}
+        {st && <div className="mt-6 p-4 bg-[#003366]/5 text-[#003366] text-center rounded-2xl text-xs font-bold animate-pulse">{st}</div>}
       </div>
     </div>
   );

@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, updateDoc, deleteDoc, getDocs, query } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
 
 // --- Firebase Initialization ---
 const userFirebaseConfig = {
@@ -50,13 +50,14 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'v-track-system';
 // --- Constants ---
 const AREAS = ['รังสิต', 'ร่มเกล้า', 'พระราม 9', 'รามอินทรา'];
 
+// ปรับเฉดสีใหม่ให้แยกกันชัดเจนยิ่งขึ้น
 const STATUSES = [
-  { id: 1, name: 'รอใบเสนอราคา', color: '#9CA3AF', bgColor: '#F3F4F6' },
-  { id: 2, name: 'อยู่ระหว่างตรวจสอบใบเสนอราคา', color: '#F59E0B', bgColor: '#FEF3C7' },
-  { id: 3, name: 'เปิดใบงานในระบบแล้ว', color: '#3B82F6', bgColor: '#DBEAFE' },
-  { id: 4, name: 'จบงานและรอรับเอกสารวางบิล', color: '#8B5CF6', bgColor: '#EDE9FE' },
-  { id: 5, name: 'ได้รับเอกสารวางบิลแล้ว', color: '#14B8A6', bgColor: '#CCFBF1' },
-  { id: 6, name: 'ส่งเอกสารเบิกจ่ายแล้ว', color: '#10B981', bgColor: '#D1FAE5' }
+  { id: 1, name: 'รอใบเสนอราคา', color: '#94A3B8', bgColor: '#F1F5F9' }, // สีเทา
+  { id: 2, name: 'อยู่ระหว่างตรวจสอบใบเสนอราคา', color: '#F59E0B', bgColor: '#FEF3C7' }, // สีส้ม
+  { id: 3, name: 'เปิดใบงานในระบบแล้ว', color: '#3B82F6', bgColor: '#DBEAFE' }, // สีฟ้า
+  { id: 4, name: 'จบงานและรอรับเอกสารวางบิล', color: '#A855F7', bgColor: '#F3E8FF' }, // สีม่วง
+  { id: 5, name: 'ได้รับเอกสารวางบิลแล้ว', color: '#EC4899', bgColor: '#FCE7F3' }, // สีชมพู (ปรับใหม่ให้ชัดเจน)
+  { id: 6, name: 'ส่งเอกสารเบิกจ่ายแล้ว', color: '#10B981', bgColor: '#D1FAE5' }  // สีเขียว
 ];
 
 // --- Main Application Component ---
@@ -311,6 +312,19 @@ function Dashboard({ tasks, settings }) {
     return { ...s, count, percent };
   });
 
+  // Calculate CSS Conic Gradient for the Pie Chart
+  let cumulativePercent = 0;
+  const conicStops = stats.filter(s => s.count > 0).map(s => {
+    const start = cumulativePercent;
+    const slicePercent = (s.count / filteredTasks.length) * 100;
+    cumulativePercent += slicePercent;
+    return `${s.color} ${start}% ${cumulativePercent}%`;
+  }).join(', ');
+  
+  const pieStyle = filteredTasks.length > 0 
+    ? { background: `conic-gradient(${conicStops})` } 
+    : { background: '#F8F9FA' };
+
   const exportExcel = () => {
     if (!window.XLSX) return;
     const ws = window.XLSX.utils.json_to_sheet(tasks.filter(t => !t.isDeleted).map(t => ({
@@ -329,7 +343,7 @@ function Dashboard({ tasks, settings }) {
   };
 
   const exportPDF = () => {
-    window.print(); // Simple and clean print
+    window.print();
   };
 
   return (
@@ -365,31 +379,34 @@ function Dashboard({ tasks, settings }) {
       </div>
 
       <div id="printable-report" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Graph Card */}
-        <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col items-center">
+        {/* Improved Graph Card */}
+        <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col">
           <h4 className="w-full text-sm font-bold text-gray-400 mb-8 uppercase tracking-widest text-center">สัดส่วนสถานะงาน</h4>
-          <div className="relative w-48 h-48 mb-10 mx-auto">
-            <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90">
-              <circle r="16" cx="16" cy="16" fill="transparent" stroke="#F8F9FA" strokeWidth="32" />
-              {stats.reduce((acc, s) => {
-                const dash = (s.count / (filteredTasks.length || 1)) * 100;
-                const off = acc.off;
-                acc.el.push(<circle key={s.id} r="16" cx="16" cy="16" fill="transparent" stroke={s.color} strokeWidth="32" strokeDasharray={`${dash} 100`} strokeDashoffset={`-${off}`} className="transition-all duration-1000" />);
-                acc.offset += dash;
-                return acc;
-              }, { el: [], offset: 0 }).el}
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
+          
+          {/* Conic Gradient Pie Chart */}
+          <div 
+            className="relative w-48 h-48 mb-8 mx-auto rounded-full shadow-md flex items-center justify-center transition-all duration-500" 
+            style={pieStyle}
+          >
+            {/* Inner circle to make it a thick donut chart (easier to read than full pie) */}
+            <div className="w-32 h-32 bg-white rounded-full flex flex-col items-center justify-center shadow-inner z-10">
               <span className="text-4xl font-bold text-[#003366]">{filteredTasks.length}</span>
-              <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">ใบงาน</span>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">ใบงานทั้งหมด</span>
             </div>
           </div>
-          <div className="w-full space-y-3">
-             <p className="text-[10px] font-bold text-gray-300 uppercase mb-2 tracking-tighter">ความหมายของสีสถานะ</p>
-            {stats.filter(s => s.count > 0).map(s => (
-              <div key={s.id} className="flex items-center justify-between text-[11px] font-medium text-gray-600">
-                <div className="flex items-center space-x-2"><div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: s.color}}></div><span>{s.name}</span></div>
-                <span className="font-bold text-[#003366]">{s.count} ({s.percent}%)</span>
+
+          <div className="w-full space-y-3 mt-2">
+             <p className="text-[10px] font-bold text-gray-300 uppercase mb-3 tracking-tighter">ความหมายของสีสถานะ</p>
+            {stats.map(s => (
+              <div key={s.id} className={`flex items-center justify-between text-[11px] font-medium transition-opacity ${s.count > 0 ? 'text-gray-600' : 'text-gray-300 opacity-50'}`}>
+                <div className="flex items-center space-x-3">
+                  <div className="w-3.5 h-3.5 rounded-full shadow-sm" style={{backgroundColor: s.color}}></div>
+                  <span className="truncate">{s.name}</span>
+                </div>
+                <div className="flex items-center space-x-2 pl-2">
+                  <span className="font-bold text-[#003366] text-sm">{s.count}</span>
+                  <span className="text-[10px] bg-gray-50 px-1.5 py-0.5 rounded text-gray-500 w-9 text-right">{s.percent}%</span>
+                </div>
               </div>
             ))}
           </div>

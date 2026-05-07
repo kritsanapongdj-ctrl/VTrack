@@ -559,17 +559,70 @@ function Management({ tasks, settings, onSave, onDelete }) {
   const [edit, setEdit] = useState(null);
   const [search, setSearch] = useState('');
   
+  // States สำหรับตัวกรองใหม่ 4 ตัว
+  const [filterMonth, setFilterMonth] = useState('');
+  const [filterProject, setFilterProject] = useState('');
+  const [filterCompany, setFilterCompany] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  // คำนวณเดือนที่มีข้อมูลในระบบ (สำหรับเมนู Dropdown)
+  const availableMonths = useMemo(() => {
+    const months = tasks.map(t => new Date(t.createdAt).toISOString().slice(0, 7));
+    return [...new Set(months.filter(m => m && !m.includes('NaN')))].sort().reverse();
+  }, [tasks]);
+  
+  // อัปเดตตรรกะการกรองข้อมูล
   const filtered = useMemo(() => {
-    return tasks.filter(t => !t.isDeleted && (t.taskNo.toLowerCase().includes(search.toLowerCase()) || t.project.toLowerCase().includes(search.toLowerCase())));
-  }, [tasks, search]);
+    return tasks.filter(t => {
+      if (t.isDeleted) return false;
+      
+      const matchSearch = search === '' || 
+        t.taskNo.toLowerCase().includes(search.toLowerCase()) || 
+        t.project.toLowerCase().includes(search.toLowerCase());
+        
+      const tMonth = new Date(t.createdAt).toISOString().slice(0, 7);
+      const matchMonth = filterMonth === '' || tMonth === filterMonth;
+      const matchProj = filterProject === '' || t.project === filterProject;
+      const matchComp = filterCompany === '' || t.company === filterCompany;
+      const matchStat = filterStatus === '' || t.status === filterStatus;
+      
+      return matchSearch && matchMonth && matchProj && matchComp && matchStat;
+    });
+  }, [tasks, search, filterMonth, filterProject, filterCompany, filterStatus]);
 
   if (edit) return <TaskForm settings={settings} initialData={edit} onSave={onSave} onSuccess={()=>setEdit(null)} onCancel={()=>setEdit(null)} />;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 mb-20">
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center relative">
-        <Search size={18} className="absolute left-7 text-gray-300" />
-        <input placeholder="ค้นหาด้วยเลขที่ใบงาน หรือชื่อโครงการ..." className="w-full pl-14 pr-6 py-4 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold transition-all" value={search} onChange={e=>setSearch(e.target.value)} />
+      <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col gap-4 relative">
+        {/* แถบค้นหาหลัก */}
+        <div className="relative">
+          <Search size={18} className="absolute left-6 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          <input placeholder="ค้นหาด้วยเลขที่ใบงาน หรือชื่อโครงการ..." className="w-full pl-14 pr-6 py-4 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold transition-all" value={search} onChange={e=>setSearch(e.target.value)} />
+        </div>
+        
+        {/* แถบตัวกรอง 4 หมวดหมู่ */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+          <select value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="w-full p-3.5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold text-gray-600 transition-all">
+            <option value="">ทุกเดือน</option>
+            {availableMonths.map(m => <option key={m} value={m}>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}</option>)}
+          </select>
+          
+          <select value={filterProject} onChange={e=>setFilterProject(e.target.value)} className="w-full p-3.5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold text-gray-600 transition-all">
+            <option value="">ทุกโครงการ</option>
+            {settings.projects.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          
+          <select value={filterCompany} onChange={e=>setFilterCompany(e.target.value)} className="w-full p-3.5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold text-gray-600 transition-all">
+            <option value="">ทุกบริษัท/ร้านค้า</option>
+            {settings.companies.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          
+          <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="w-full p-3.5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold text-gray-600 transition-all">
+            <option value="">ทุกสถานะงาน</option>
+            {STATUSES.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+        </div>
       </div>
 
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">

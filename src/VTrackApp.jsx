@@ -47,18 +47,27 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'v-track-system';
 
-// --- Constants ---
+// --- Constants & Helpers ---
 const AREAS = ['รังสิต', 'ร่มเกล้า', 'พระราม 9', 'รามอินทรา'];
 
-// ปรับเฉดสีใหม่ให้แยกกันชัดเจนยิ่งขึ้น
 const STATUSES = [
-  { id: 1, name: 'รอใบเสนอราคา', color: '#94A3B8', bgColor: '#F1F5F9' }, // สีเทา
-  { id: 2, name: 'อยู่ระหว่างตรวจสอบใบเสนอราคา', color: '#F59E0B', bgColor: '#FEF3C7' }, // สีส้ม
-  { id: 3, name: 'เปิดใบงานในระบบแล้ว', color: '#3B82F6', bgColor: '#DBEAFE' }, // สีฟ้า
-  { id: 4, name: 'จบงานและรอรับเอกสารวางบิล', color: '#A855F7', bgColor: '#F3E8FF' }, // สีม่วง
-  { id: 5, name: 'ได้รับเอกสารวางบิลแล้ว', color: '#EC4899', bgColor: '#FCE7F3' }, // สีชมพู (ปรับใหม่ให้ชัดเจน)
-  { id: 6, name: 'ส่งเอกสารเบิกจ่ายแล้ว', color: '#10B981', bgColor: '#D1FAE5' }  // สีเขียว
+  { id: 1, name: 'รอใบเสนอราคา', color: '#94A3B8', bgColor: '#F1F5F9' },
+  { id: 2, name: 'อยู่ระหว่างตรวจสอบใบเสนอราคา', color: '#F59E0B', bgColor: '#FEF3C7' },
+  { id: 3, name: 'เปิดใบงานในระบบแล้ว', color: '#3B82F6', bgColor: '#DBEAFE' },
+  { id: 4, name: 'จบงานและรอรับเอกสารวางบิล', color: '#A855F7', bgColor: '#F3E8FF' },
+  { id: 5, name: 'ได้รับเอกสารวางบิลแล้ว', color: '#EC4899', bgColor: '#FCE7F3' },
+  { id: 6, name: 'ส่งเอกสารเบิกจ่ายแล้ว', color: '#10B981', bgColor: '#D1FAE5' }
 ];
+
+// เช็คงานที่เลยกำหนด
+const isOverdue = (dateString) => {
+  if (!dateString) return false;
+  const taskDate = new Date(dateString);
+  taskDate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return taskDate < today;
+};
 
 // --- Main Application Component ---
 export default function App() {
@@ -229,7 +238,7 @@ export default function App() {
                 {activeTab === 'dashboard' && <Dashboard tasks={tasks} settings={settings} />}
                 {activeTab === 'add' && <TaskForm settings={settings} onSave={saveTask} onSuccess={() => setActiveTab('management')} />}
                 {activeTab === 'management' && <Management tasks={tasks} settings={settings} onSave={saveTask} onDelete={softDeleteTask} />}
-                {activeTab === 'calendar' && <CalendarView tasks={tasks} />}
+                {activeTab === 'calendar' && <CalendarView tasks={tasks} settings={settings} onSave={saveTask} />}
                 {activeTab === 'settings' && <SettingsPanel settings={settings} updateSettings={updateSettings} tasks={tasks} onSave={saveTask} onClear={clearAllData} />}
               </>
             )}
@@ -312,7 +321,6 @@ function Dashboard({ tasks, settings }) {
     return { ...s, count, percent };
   });
 
-  // Calculate CSS Conic Gradient for the Pie Chart
   let cumulativePercent = 0;
   const conicStops = stats.filter(s => s.count > 0).map(s => {
     const start = cumulativePercent;
@@ -321,9 +329,7 @@ function Dashboard({ tasks, settings }) {
     return `${s.color} ${start}% ${cumulativePercent}%`;
   }).join(', ');
   
-  const pieStyle = filteredTasks.length > 0 
-    ? { background: `conic-gradient(${conicStops})` } 
-    : { background: '#F8F9FA' };
+  const pieStyle = filteredTasks.length > 0 ? { background: `conic-gradient(${conicStops})` } : { background: '#F8F9FA' };
 
   const exportExcel = () => {
     if (!window.XLSX) return;
@@ -342,13 +348,10 @@ function Dashboard({ tasks, settings }) {
     window.XLSX.writeFile(wb, `VTrack_Backup_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  const exportPDF = () => {
-    window.print();
-  };
+  const exportPDF = () => window.print();
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700">
-      {/* Filters & Actions */}
       <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1">
@@ -379,16 +382,10 @@ function Dashboard({ tasks, settings }) {
       </div>
 
       <div id="printable-report" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Improved Graph Card */}
         <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col">
           <h4 className="w-full text-sm font-bold text-gray-400 mb-8 uppercase tracking-widest text-center">สัดส่วนสถานะงาน</h4>
           
-          {/* Conic Gradient Pie Chart */}
-          <div 
-            className="relative w-48 h-48 mb-8 mx-auto rounded-full shadow-md flex items-center justify-center transition-all duration-500" 
-            style={pieStyle}
-          >
-            {/* Inner circle to make it a thick donut chart (easier to read than full pie) */}
+          <div className="relative w-48 h-48 mb-8 mx-auto rounded-full shadow-md flex items-center justify-center transition-all duration-500" style={pieStyle}>
             <div className="w-32 h-32 bg-white rounded-full flex flex-col items-center justify-center shadow-inner z-10">
               <span className="text-4xl font-bold text-[#003366]">{filteredTasks.length}</span>
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">ใบงานทั้งหมด</span>
@@ -412,7 +409,6 @@ function Dashboard({ tasks, settings }) {
           </div>
         </div>
 
-        {/* Task Cards/Table List */}
         <div className="lg:col-span-2 bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
           <div className="p-6 md:p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
             <div className="flex flex-col">
@@ -426,13 +422,19 @@ function Dashboard({ tasks, settings }) {
                <div className="divide-y divide-gray-50">
                  {filteredTasks.map(t => (
                     <div key={t.id} className="p-5 md:p-6 flex items-center justify-between hover:bg-gray-50 transition-colors cursor-default">
-                      <div className="flex flex-col min-w-0 mr-4">
-                        <span className="font-bold text-[#003366] text-sm md:text-base">{t.taskNo}</span>
+                      <div className="flex flex-col min-w-0 mr-4 text-left">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-[#003366] text-sm md:text-base">{t.taskNo}</span>
+                          {isOverdue(t.aptDate) && <span className="bg-red-100 text-red-600 text-[9px] px-2 py-0.5 rounded-md font-bold whitespace-nowrap">งานเกินกำหนด</span>}
+                        </div>
                         <div className="flex items-center space-x-2 mt-1">
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter truncate max-w-[80px] sm:max-w-none">{t.company}</span>
                           <span className="text-gray-200 text-[10px]">•</span>
                           <span className="text-[11px] text-gray-500 truncate">{t.project}</span>
                         </div>
+                        {t.status === 'จบงานและรอรับเอกสารวางบิล' && (
+                          <span className="text-[10px] text-orange-500 font-bold mt-1.5">* กรุณาส่งเอกสารวางบิลภายในวันที่ 15</span>
+                        )}
                       </div>
                       <div className="flex flex-col items-end shrink-0">
                          <StatusTag label={t.status} />
@@ -445,7 +447,6 @@ function Dashboard({ tasks, settings }) {
               <div className="flex-1 flex flex-col items-center justify-center py-24 text-gray-300">
                 <CalendarDays size={48} className="mb-3 opacity-10"/>
                 <p className="text-sm font-bold">ไม่พบข้อมูลใบงานในเดือนนี้</p>
-                <p className="text-[10px] mt-1 italic">เลือกเดือนอื่นๆ เพื่อตรวจสอบข้อมูลย้อนหลัง</p>
               </div>
             )}
           </div>
@@ -466,7 +467,7 @@ function Dashboard({ tasks, settings }) {
   );
 }
 
-function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = null }) {
+function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = null, isModal = false }) {
   const [d, setD] = useState(initialData || { taskNo: '', project: '', company: '', area: AREAS[0], status: STATUSES[0].name, aptDate: '', payDate: '', details: '' });
   
   const sub = async (e) => { 
@@ -476,55 +477,22 @@ function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = 
   };
 
   return (
-    <form onSubmit={sub} className="bg-white p-6 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-6 max-w-3xl mx-auto mb-24 animate-in slide-in-from-bottom-4 duration-500">
+    <form onSubmit={sub} className={`bg-white p-6 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-6 w-full max-w-3xl mx-auto animate-in slide-in-from-bottom-4 duration-500 ${isModal ? '' : 'mb-24'}`}>
       <div className="flex items-center space-x-4 mb-2">
-        <div className="w-12 h-12 bg-[#003366] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-[#003366]/20">
+        <div className="w-12 h-12 bg-[#003366] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-[#003366]/20 shrink-0">
           {initialData ? <Edit size={24}/> : <PlusCircle size={24}/>}
         </div>
-        <h3 className="font-bold text-2xl text-[#003366]">{initialData ? 'แก้ไขข้อมูลใบงาน' : 'เพิ่มใบงานใหม่'}</h3>
+        <h3 className="font-bold text-xl md:text-2xl text-[#003366] text-left">{initialData ? 'แก้ไขข้อมูลใบงาน' : 'เพิ่มใบงานใหม่'}</h3>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Field label="เลขที่ใบงาน">
-          <input required className="input-style" value={d.taskNo} onChange={e=>setD({...d, taskNo: e.target.value})} placeholder="ระบุเลขที่ใบงาน..."/>
-        </Field>
-        
-        <Field label="โครงการ">
-          <select required className="input-style" value={d.project} onChange={e=>setD({...d, project: e.target.value})}>
-            <option value="">เลือกโครงการ</option>
-            {settings.projects.map(p=><option key={p} value={p}>{p}</option>)}
-          </select>
-        </Field>
-        
-        <Field label="บริษัท/ร้านค้า">
-          <select required className="input-style" value={d.company} onChange={e=>setD({...d, company: e.target.value})}>
-            <option value="">เลือกร้านค้า</option>
-            {settings.companies.map(c=><option key={c} value={c}>{c}</option>)}
-          </select>
-        </Field>
-        
-        <Field label="พื้นที่">
-          <select className="input-style" value={d.area} onChange={e=>setD({...d, area: e.target.value})}>
-            {AREAS.map(a=><option key={a} value={a}>{a}</option>)}
-          </select>
-        </Field>
-        
-        <div className="md:col-span-2">
-          <Field label="สถานะการดำเนินงาน">
-            <select className="input-style" value={d.status} onChange={e=>setD({...d, status: e.target.value})}>
-              {STATUSES.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
-            </select>
-          </Field>
-        </div>
-        
-        <Field label="วันนัดหมายเข้างาน">
-          <input type="date" className="input-style" value={d.aptDate} onChange={e=>setD({...d, aptDate: e.target.value})}/>
-        </Field>
-        
-        <Field label="วันทำจ่าย">
-          <input type="date" className="input-style" value={d.payDate} onChange={e=>setD({...d, payDate: e.target.value})}/>
-        </Field>
-        
+        <Field label="เลขที่ใบงาน"><input required className="input-style" value={d.taskNo} onChange={e=>setD({...d, taskNo: e.target.value})} placeholder="ระบุเลขที่ใบงาน..."/></Field>
+        <Field label="โครงการ"><select required className="input-style" value={d.project} onChange={e=>setD({...d, project: e.target.value})}><option value="">เลือกโครงการ</option>{settings.projects.map(p=><option key={p} value={p}>{p}</option>)}</select></Field>
+        <Field label="บริษัท/ร้านค้า"><select required className="input-style" value={d.company} onChange={e=>setD({...d, company: e.target.value})}><option value="">เลือกร้านค้า</option>{settings.companies.map(c=><option key={c} value={c}>{c}</option>)}</select></Field>
+        <Field label="พื้นที่"><select className="input-style" value={d.area} onChange={e=>setD({...d, area: e.target.value})}>{AREAS.map(a=><option key={a} value={a}>{a}</option>)}</select></Field>
+        <div className="md:col-span-2"><Field label="สถานะการดำเนินงาน"><select className="input-style" value={d.status} onChange={e=>setD({...d, status: e.target.value})}>{STATUSES.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}</select></Field></div>
+        <Field label="วันนัดหมายเข้างาน"><input type="date" className="input-style" value={d.aptDate} onChange={e=>setD({...d, aptDate: e.target.value})}/></Field>
+        <Field label="วันทำจ่าย"><input type="date" className="input-style" value={d.payDate} onChange={e=>setD({...d, payDate: e.target.value})}/></Field>
         <div className="md:col-span-2">
           <Field label="รายละเอียดงาน">
             <textarea rows="4" className="input-style resize-none" value={d.details} onChange={e=>setD({...d, details: e.target.value})} placeholder="ระบุรายละเอียดเพิ่มเติม..."></textarea>
@@ -537,11 +505,7 @@ function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = 
         <button type="submit" className="bg-[#003366] text-white px-12 py-4 rounded-2xl font-bold shadow-xl shadow-[#003366]/20 active:scale-95 transition-all order-1 sm:order-2">บันทึกข้อมูลใบงาน</button>
       </div>
       
-      <style>{`
-        .input-style { 
-          @apply w-full p-4 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] transition-all text-sm font-semibold text-gray-700 placeholder:text-gray-300; 
-        }
-      `}</style>
+      <style>{`.input-style { @apply w-full p-4 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] transition-all text-sm font-semibold text-gray-700 placeholder:text-gray-300; }`}</style>
     </form>
   );
 }
@@ -559,27 +523,20 @@ function Management({ tasks, settings, onSave, onDelete }) {
   const [edit, setEdit] = useState(null);
   const [search, setSearch] = useState('');
   
-  // States สำหรับตัวกรองใหม่ 4 ตัว
   const [filterMonth, setFilterMonth] = useState('');
   const [filterProject, setFilterProject] = useState('');
   const [filterCompany, setFilterCompany] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
 
-  // คำนวณเดือนที่มีข้อมูลในระบบ (สำหรับเมนู Dropdown)
   const availableMonths = useMemo(() => {
     const months = tasks.map(t => new Date(t.createdAt).toISOString().slice(0, 7));
     return [...new Set(months.filter(m => m && !m.includes('NaN')))].sort().reverse();
   }, [tasks]);
   
-  // อัปเดตตรรกะการกรองข้อมูล
   const filtered = useMemo(() => {
     return tasks.filter(t => {
       if (t.isDeleted) return false;
-      
-      const matchSearch = search === '' || 
-        t.taskNo.toLowerCase().includes(search.toLowerCase()) || 
-        t.project.toLowerCase().includes(search.toLowerCase());
-        
+      const matchSearch = search === '' || t.taskNo.toLowerCase().includes(search.toLowerCase()) || t.project.toLowerCase().includes(search.toLowerCase());
       const tMonth = new Date(t.createdAt).toISOString().slice(0, 7);
       const matchMonth = filterMonth === '' || tMonth === filterMonth;
       const matchProj = filterProject === '' || t.project === filterProject;
@@ -595,29 +552,23 @@ function Management({ tasks, settings, onSave, onDelete }) {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 mb-20">
       <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col gap-4 relative">
-        {/* แถบค้นหาหลัก */}
         <div className="relative">
           <Search size={18} className="absolute left-6 top-1/2 transform -translate-y-1/2 text-gray-400" />
           <input placeholder="ค้นหาด้วยเลขที่ใบงาน หรือชื่อโครงการ..." className="w-full pl-14 pr-6 py-4 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold transition-all" value={search} onChange={e=>setSearch(e.target.value)} />
         </div>
-        
-        {/* แถบตัวกรอง 4 หมวดหมู่ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
           <select value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="w-full p-3.5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold text-gray-600 transition-all">
             <option value="">ทุกเดือน</option>
             {availableMonths.map(m => <option key={m} value={m}>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}</option>)}
           </select>
-          
           <select value={filterProject} onChange={e=>setFilterProject(e.target.value)} className="w-full p-3.5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold text-gray-600 transition-all">
             <option value="">ทุกโครงการ</option>
             {settings.projects.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
-          
           <select value={filterCompany} onChange={e=>setFilterCompany(e.target.value)} className="w-full p-3.5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold text-gray-600 transition-all">
             <option value="">ทุกบริษัท/ร้านค้า</option>
             {settings.companies.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          
           <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="w-full p-3.5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold text-gray-600 transition-all">
             <option value="">ทุกสถานะงาน</option>
             {STATUSES.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
@@ -626,7 +577,6 @@ function Management({ tasks, settings, onSave, onDelete }) {
       </div>
 
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
-        {/* Table for Desktop */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 text-gray-400 text-[10px] uppercase font-bold tracking-widest border-b border-gray-100">
@@ -641,7 +591,15 @@ function Management({ tasks, settings, onSave, onDelete }) {
             <tbody className="divide-y divide-gray-50">
               {filtered.map(t=>(
                 <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-8 py-6 font-bold text-[#003366] whitespace-nowrap">{t.taskNo}</td>
+                  <td className="px-8 py-6 whitespace-nowrap">
+                    <div className="flex flex-col">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-[#003366]">{t.taskNo}</span>
+                        {isOverdue(t.aptDate) && <span className="bg-red-100 text-red-600 text-[9px] px-2 py-0.5 rounded-md font-bold">งานเกินกำหนด</span>}
+                      </div>
+                      {t.status === 'จบงานและรอรับเอกสารวางบิล' && <span className="text-[10px] text-orange-500 font-bold mt-1">* ส่งวางบิลภายในวันที่ 15</span>}
+                    </div>
+                  </td>
                   <td className="px-8 py-6 text-gray-500 font-medium whitespace-nowrap">{t.project}</td>
                   <td className="px-8 py-6 text-gray-500 text-xs max-w-xs truncate" title={t.details}>{t.details || '-'}</td>
                   <td className="px-8 py-6 whitespace-nowrap"><StatusTag label={t.status}/></td>
@@ -655,23 +613,22 @@ function Management({ tasks, settings, onSave, onDelete }) {
           </table>
         </div>
 
-        {/* Cards for Mobile */}
         <div className="md:hidden divide-y divide-gray-50 text-left">
           {filtered.map(t => (
             <div key={t.id} className="p-6 space-y-4">
               <div className="flex justify-between items-start">
                 <div className="text-left min-w-0 pr-4">
-                  <div className="text-base font-bold text-[#003366] truncate">{t.taskNo}</div>
+                  <div className="flex items-center space-x-2">
+                    <div className="text-base font-bold text-[#003366] truncate">{t.taskNo}</div>
+                    {isOverdue(t.aptDate) && <span className="bg-red-100 text-red-600 text-[9px] px-2 py-0.5 rounded-md font-bold whitespace-nowrap shrink-0">งานเกินกำหนด</span>}
+                  </div>
                   <div className="text-[11px] font-bold text-gray-400 mt-1 uppercase tracking-tighter truncate">{t.project}</div>
+                  {t.status === 'จบงานและรอรับเอกสารวางบิล' && <div className="text-[10px] text-orange-500 font-bold mt-1.5">* ส่งเอกสารวางบิลภายในวันที่ 15</div>}
                 </div>
                 <div className="shrink-0"><StatusTag label={t.status} /></div>
               </div>
               
-              {t.details && (
-                <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-xl line-clamp-2" title={t.details}>
-                  {t.details}
-                </div>
-              )}
+              {t.details && <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-xl line-clamp-2" title={t.details}>{t.details}</div>}
               
               <div className="flex justify-between items-center pt-2">
                 <div className="text-[10px] text-gray-300 uppercase font-bold tracking-widest bg-gray-50 px-2 py-1 rounded-md">{t.area}</div>
@@ -683,13 +640,6 @@ function Management({ tasks, settings, onSave, onDelete }) {
             </div>
           ))}
         </div>
-
-        {filtered.length === 0 && (
-          <div className="py-24 text-center text-gray-300">
-            <FileText size={56} className="mx-auto mb-4 opacity-10"/>
-            <p className="text-sm font-bold">ไม่พบข้อมูลที่ต้องการ</p>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -700,38 +650,97 @@ function StatusTag({ label }) {
   return <span className="px-3 py-1 rounded-full text-[9px] font-bold whitespace-nowrap border border-white shadow-sm" style={{backgroundColor: s?.bgColor, color: s?.color}}>{label}</span>;
 }
 
-function CalendarView({ tasks }) {
+function CalendarView({ tasks, settings, onSave }) {
   const [now, setNow] = useState(new Date());
+  const [selectedDayTasks, setSelectedDayTasks] = useState(null); // สำหรับเปิด PopUp ดูรายการงานแต่ละวัน
+  const [editTask, setEditTask] = useState(null); // สำหรับเปิดหน้าต่างดูรายละเอียด/แก้ไขงาน
+  
   const y = now.getFullYear(); const m = now.getMonth();
   const daysIn = new Date(y, m + 1, 0).getDate();
   const first = new Date(y, m, 1).getDay();
   const grid = [...Array(first).fill(null), ...Array(daysIn).keys()].map(i => i === null ? null : i + 1);
 
   return (
-    <div className="bg-white p-5 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100 animate-in fade-in duration-700 mb-20">
+    <div className="bg-white p-5 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100 animate-in fade-in duration-700 mb-20 relative">
       <div className="flex justify-between items-center mb-8">
         <button onClick={()=>setNow(new Date(y, m-1, 1))} className="p-3 bg-gray-50 rounded-2xl text-gray-400 hover:bg-gray-100 transition-colors"><ChevronLeft size={18}/></button>
         <h4 className="font-bold text-[#003366] md:text-lg">{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(now)}</h4>
         <button onClick={()=>setNow(new Date(y, m+1, 1))} className="p-3 bg-gray-50 rounded-2xl text-gray-400 hover:bg-gray-100 transition-colors"><ChevronRight size={18}/></button>
       </div>
+      
       <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-[1.5rem] overflow-hidden border border-gray-100 shadow-inner">
         {['อา','จ','อ','พ','พฤ','ศ','ส'].map(d=><div key={d} className="bg-white p-3 text-center text-[10px] text-gray-300 font-bold uppercase">{d}</div>)}
         {grid.map((d, i) => {
           const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
           const tks = tasks.filter(t => !t.isDeleted && t.aptDate === dateStr);
           const isToday = new Date().toISOString().split('T')[0] === dateStr;
+          
           return (
-            <div key={i} className={`bg-white min-h-[70px] md:min-h-[120px] p-1.5 md:p-3 transition-colors ${d ? 'hover:bg-gray-50/50' : 'bg-gray-50/20'}`}>
+            <div 
+              key={i} 
+              onClick={() => d && setSelectedDayTasks({ date: dateStr, displayDate: d, tks })}
+              className={`bg-white min-h-[70px] md:min-h-[120px] p-1.5 md:p-3 transition-colors text-left ${d ? 'cursor-pointer hover:bg-gray-50/80 hover:shadow-inner' : 'bg-gray-50/20'}`}
+            >
               {d && <div className={`text-[10px] md:text-xs mb-1 font-bold ${isToday ? 'text-[#C5A059]' : 'text-gray-300'}`}>{d}</div>}
               <div className="space-y-1">
-                {tks.map(t=>(
-                  <div key={t.id} className="text-[8px] bg-[#003366] text-white p-1 rounded-md truncate shadow-sm font-bold" title={t.taskNo}>{t.taskNo}</div>
+                {tks.slice(0, 3).map(t=>(
+                  <div key={t.id} className={`text-[8px] text-white p-1 rounded-md truncate shadow-sm font-bold ${isOverdue(t.aptDate) ? 'bg-red-500' : 'bg-[#003366]'}`} title={t.taskNo}>
+                    {t.taskNo}
+                  </div>
                 ))}
+                {tks.length > 3 && <div className="text-[9px] text-gray-400 font-bold text-center mt-1">+{tks.length - 3} งาน</div>}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* PopUp: แสดงรายการใบงานในวันที่เลือก */}
+      {selectedDayTasks && !editTask && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-in fade-in">
+          <div className="bg-white p-6 md:p-8 rounded-[2rem] w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+               <h3 className="font-bold text-xl text-[#003366]">รายการงานวันที่ {selectedDayTasks.displayDate} {new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(now)}</h3>
+               <button onClick={() => setSelectedDayTasks(null)} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors text-gray-400"><X size={18}/></button>
+            </div>
+            
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar text-left">
+               {selectedDayTasks.tks.length > 0 ? selectedDayTasks.tks.map(t => (
+                  <div key={t.id} className="p-5 border border-gray-100 rounded-2xl bg-gray-50/50 hover:bg-white hover:shadow-md transition-all">
+                     <div className="flex justify-between items-start mb-2">
+                        <div className="flex flex-col">
+                           <div className="flex items-center space-x-2">
+                              <span className="font-bold text-[#003366] text-lg">{t.taskNo}</span>
+                              {isOverdue(t.aptDate) && <span className="bg-red-100 text-red-600 text-[9px] px-2 py-0.5 rounded-md font-bold whitespace-nowrap">งานเกินกำหนด</span>}
+                           </div>
+                           <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter mt-1">{t.project} | {t.company}</span>
+                        </div>
+                     </div>
+                     <div className="mb-4 mt-2"><StatusTag label={t.status} /></div>
+                     <button onClick={() => { setEditTask(t); setSelectedDayTasks(null); }} className="w-full py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-[#C5A059] shadow-sm hover:border-[#C5A059] hover:bg-[#C5A059]/5 transition-colors">
+                       ดูรายละเอียด / แก้ไขงาน
+                     </button>
+                  </div>
+               )) : (
+                  <div className="text-center text-gray-400 py-10 flex flex-col items-center">
+                    <CalendarDays size={40} className="opacity-20 mb-3"/>
+                    <p className="text-sm font-bold">ไม่มีรายการนัดหมายในวันนี้</p>
+                  </div>
+               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PopUp: เปิดหน้าต่างแก้ไขข้อมูลงานแบบเต็ม (ซ้อนปฏิทิน) */}
+      {editTask && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-[70] p-4 sm:p-6 overflow-y-auto custom-scrollbar">
+          <div className="relative w-full max-w-3xl my-auto animate-in zoom-in-95 duration-200">
+            <button onClick={() => setEditTask(null)} className="absolute top-6 right-6 md:top-8 md:right-8 z-10 p-2 bg-gray-100 rounded-full hover:bg-gray-200 text-gray-600 shadow-sm"><X size={20}/></button>
+            <TaskForm settings={settings} initialData={editTask} onSave={onSave} onSuccess={() => setEditTask(null)} onCancel={() => setEditTask(null)} isModal={true} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

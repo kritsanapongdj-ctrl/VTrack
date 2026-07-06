@@ -119,11 +119,17 @@ export default function App() {
 
   const saveTask = async (taskData, isEdit = false, taskId = null) => {
     const tasksRef = collection(db, 'artifacts', appId, 'public', 'data', 'vtrack_tasks');
+    let finalData = { ...taskData };
     if (isEdit && taskId) {
+      const oldTask = tasks.find(t => t.id === taskId);
+      if (oldTask && oldTask.status !== taskData.status) {
+        finalData.statusUpdatedAt = Date.now();
+      }
       const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'vtrack_tasks', taskId);
-      await updateDoc(docRef, { ...taskData, updatedAt: Date.now() });
+      await updateDoc(docRef, { ...finalData, updatedAt: Date.now() });
     } else {
-      await addDoc(tasksRef, { ...taskData, isDeleted: false, createdAt: Date.now() });
+      finalData.statusUpdatedAt = Date.now();
+      await addDoc(tasksRef, { ...finalData, isDeleted: false, createdAt: Date.now() });
     }
     
     if (GOOGLE_SHEETS_WEBHOOK_URL) {
@@ -132,7 +138,7 @@ export default function App() {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...taskData, action: isEdit ? 'edit' : 'add', id: taskId })
+          body: JSON.stringify({ ...finalData, action: isEdit ? 'edit' : 'add', id: taskId })
         });
       } catch (e) { console.error('Webhook Error:', e); }
     }
@@ -344,9 +350,19 @@ function PrintReport({ tasks, printData, onDone }) {
   const pieStyle = filteredTasks.length > 0 ? { background: `conic-gradient(${conicStops})` } : { background: '#eee' };
 
   const twoMonthsAgo = Date.now() - (60 * 24 * 60 * 60 * 1000);
-  const overdueBillingTasks = activeTasks.filter(t => 
-    t.status === 'จบงานและรอรับเอกสารวางบิล' && (t.createdAt < twoMonthsAgo)
-  ).sort((a, b) => b.createdAt - a.createdAt);
+  const overdueBillingTasks = activeTasks.filter(t => {
+    const statusDate = t.statusUpdatedAt || t.updatedAt || t.createdAt;
+    const isOverdue = t.status === 'จบงานและรอรับเอกสารวางบิล' && (statusDate < twoMonthsAgo);
+    const tMonth = getMonthStr(t.createdAt);
+    const monthMatch = selectedMonth ? (tMonth === selectedMonth) : true;
+    const projMatch = filterProj ? (t.project === filterProj) : true;
+    const compMatch = filterComp ? (t.company === filterComp) : true;
+    return isOverdue && monthMatch && projMatch && compMatch;
+  }).sort((a, b) => {
+    const dateA = a.statusUpdatedAt || a.updatedAt || a.createdAt;
+    const dateB = b.statusUpdatedAt || b.updatedAt || b.createdAt;
+    return dateB - dateA;
+  });
 
   return (
     <div className="bg-white min-h-screen text-black font-sans p-10 max-w-[210mm] mx-auto relative overflow-hidden">

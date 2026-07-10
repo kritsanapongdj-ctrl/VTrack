@@ -304,7 +304,7 @@ function DetailField({ label, value, children }) {
 }
 // -------------------------------------------------------------
 function PrintReport({ tasks, printData, onDone }) {
-  const { selectedMonth, filterProj, filterComp } = printData;
+  const { selectedMonth, filterProj, filterComp, filterStatus } = printData;
   const activeTasks = tasks.filter(t => !t.isDeleted);
   
   useEffect(() => {
@@ -314,11 +314,14 @@ function PrintReport({ tasks, printData, onDone }) {
     return () => { clearTimeout(timer); window.removeEventListener('afterprint', handleAfterPrint); };
   }, [onDone]);
 
-  // Filter tasks based on month/proj/comp
+  // Filter tasks based on month/proj/comp/status
   const filteredTasks = activeTasks.filter(t => {
     const tMonth = getMonthStr(t.createdAt);
     const monthMatch = selectedMonth ? (tMonth === selectedMonth) : true;
-    return monthMatch && (filterProj ? t.project === filterProj : true) && (filterComp ? t.company === filterComp : true);
+    const projMatch = filterProj ? t.project === filterProj : true;
+    const compMatch = filterComp ? t.company === filterComp : true;
+    const statusMatch = filterStatus ? t.status === filterStatus : true;
+    return monthMatch && projMatch && compMatch && statusMatch;
   });
 
   const allStats = STATUSES.map(s => {
@@ -333,14 +336,6 @@ function PrintReport({ tasks, printData, onDone }) {
     return { ...s, count, percent };
   });
 
-  let allCumulativePercent = 0;
-  const allConicStops = allStats.filter(s => s.count > 0).map(s => {
-    const start = allCumulativePercent;
-    allCumulativePercent += (s.count / activeTasks.length) * 100;
-    return `${s.color} ${start}% ${allCumulativePercent}%`;
-  }).join(', ');
-  const allPieStyle = activeTasks.length > 0 ? { background: `conic-gradient(${allConicStops})` } : { background: '#eee' };
-
   let cumulativePercent = 0;
   const conicStops = filteredStats.filter(s => s.count > 0).map(s => {
     const start = cumulativePercent;
@@ -349,28 +344,13 @@ function PrintReport({ tasks, printData, onDone }) {
   }).join(', ');
   const pieStyle = filteredTasks.length > 0 ? { background: `conic-gradient(${conicStops})` } : { background: '#eee' };
 
-  const twoMonthsAgo = Date.now() - (60 * 24 * 60 * 60 * 1000);
-  const overdueBillingTasks = activeTasks.filter(t => {
-    const statusDate = t.statusUpdatedAt || t.updatedAt || t.createdAt;
-    const isOverdue = t.status === 'จบงานและรอรับเอกสารวางบิล' && (statusDate < twoMonthsAgo);
-    const tMonth = getMonthStr(t.createdAt);
-    const monthMatch = selectedMonth ? (tMonth === selectedMonth) : true;
-    const projMatch = filterProj ? (t.project === filterProj) : true;
-    const compMatch = filterComp ? (t.company === filterComp) : true;
-    return isOverdue && monthMatch && projMatch && compMatch;
-  }).sort((a, b) => {
-    const dateA = a.statusUpdatedAt || a.updatedAt || a.createdAt;
-    const dateB = b.statusUpdatedAt || b.updatedAt || b.createdAt;
-    return dateB - dateA;
-  });
-
   return (
-    <div className="bg-white min-h-screen text-black font-sans p-10 max-w-[210mm] mx-auto relative overflow-hidden">
+    <div className="bg-white min-h-screen text-black font-sans p-8 md:p-10 max-w-[210mm] mx-auto relative overflow-hidden">
       {/* Formal Header */}
       <div className="border-b-2 border-black pb-4 mb-8 flex flex-col md:flex-row md:justify-between md:items-end">
         <div>
-          <h1 className="text-3xl font-bold text-black uppercase">รายงานสรุปสถานะใบงาน</h1>
-          <h2 className="text-xl font-bold mt-2 text-gray-800">ระบบการจัดการ V-TRACK</h2>
+          <h1 className="text-2xl md:text-3xl font-bold text-black uppercase">รายงานสรุปใบงาน (Detailed Report)</h1>
+          <h2 className="text-lg md:text-xl font-bold mt-2 text-gray-800">ระบบการจัดการ V-TRACK</h2>
         </div>
         <div className="text-left md:text-right text-sm mt-4 md:mt-0 text-gray-600">
           <p><strong>พิมพ์เมื่อ:</strong> {new Intl.DateTimeFormat('th-TH', { dateStyle: 'long', timeStyle: 'short' }).format(new Date())}</p>
@@ -378,53 +358,29 @@ function PrintReport({ tasks, printData, onDone }) {
       </div>
 
       {/* Overview Charts Section */}
-      <div className="flex flex-col md:flex-row gap-8 mb-10">
-        <div className="flex-1 border border-gray-300 p-6 rounded-lg break-inside-avoid">
-          <h3 className="font-bold text-center mb-6 text-sm uppercase tracking-wide bg-gray-100 py-2 rounded">ภาพรวมใบงานทั้งหมดในระบบ</h3>
-          <div className="flex flex-col xl:flex-row items-center xl:items-start gap-8">
-            <div className="relative w-36 h-36 rounded-full border border-gray-200 shadow-inner flex-shrink-0" style={allPieStyle}>
+      <div className="mb-10">
+        <div className="border border-gray-300 p-6 rounded-lg break-inside-avoid shadow-sm">
+          <h3 className="font-bold text-center mb-4 text-base uppercase tracking-wide bg-gray-100 py-2 rounded">สรุปภาพรวมตามตัวกรอง</h3>
+          <div className="text-sm mb-6 text-gray-700 bg-gray-50 p-4 rounded border border-gray-200">
+            <p className="mb-2"><strong>ประจำเดือน:</strong> {selectedMonth ? new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(selectedMonth)) : 'ทุกเดือน'}</p>
+            <p className="mb-2"><strong>โครงการ:</strong> {filterProj || 'ทั้งหมด'} | <strong>ร้านค้า:</strong> {filterComp || 'ทั้งหมด'}</p>
+            <p><strong>สถานะ:</strong> {filterStatus || 'ทุกสถานะ'}</p>
+          </div>
+          <div className="flex flex-col md:flex-row items-center justify-center gap-10">
+            <div className="relative w-40 h-40 rounded-full border border-gray-200 shadow-inner flex-shrink-0" style={pieStyle}>
                <div className="absolute inset-4 bg-white rounded-full flex flex-col items-center justify-center">
-                  <span className="font-bold text-xl">{activeTasks.length}</span>
+                  <span className="font-bold text-3xl">{filteredTasks.length}</span>
                </div>
             </div>
-            <div className="flex-1 text-xs w-full">
-               <p className="font-bold mb-3 border-b pb-2 text-gray-800">รวมทั้งสิ้น {activeTasks.length} รายการ</p>
-               <table className="w-full text-left">
-                 <tbody>
-                   {allStats.filter(s => s.count > 0).map(s => (
-                     <tr key={s.id} className="border-b border-dashed border-gray-200 last:border-0">
-                       <td className="py-2 flex items-center gap-2"><div className="w-3 h-3 rounded-sm border border-gray-200" style={{backgroundColor: s.color}}></div>{s.name}</td>
-                       <td className="py-2 text-right font-bold w-12">{s.count}</td>
-                       <td className="py-2 text-right text-gray-500 w-12">{s.percent}%</td>
-                     </tr>
-                   ))}
-                 </tbody>
-               </table>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 border border-gray-300 p-6 rounded-lg break-inside-avoid">
-          <h3 className="font-bold text-center mb-4 text-sm uppercase tracking-wide bg-gray-100 py-2 rounded">สรุปตามตัวกรอง</h3>
-          <div className="text-xs mb-6 text-gray-700 bg-gray-50 p-3 rounded border border-gray-200">
-            <p className="mb-1"><strong>ประจำเดือน:</strong> {selectedMonth ? new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(selectedMonth)) : 'ทุกเดือน'}</p>
-            <p><strong>โครงการ:</strong> {filterProj || 'ทั้งหมด'} | <strong>ร้านค้า:</strong> {filterComp || 'ทั้งหมด'}</p>
-          </div>
-          <div className="flex flex-col xl:flex-row items-center xl:items-start gap-8">
-            <div className="relative w-36 h-36 rounded-full border border-gray-200 shadow-inner flex-shrink-0" style={pieStyle}>
-               <div className="absolute inset-4 bg-white rounded-full flex flex-col items-center justify-center">
-                  <span className="font-bold text-xl">{filteredTasks.length}</span>
-               </div>
-            </div>
-            <div className="flex-1 text-xs w-full">
-               <p className="font-bold mb-3 border-b pb-2 text-gray-800">รวม {filteredTasks.length} รายการ</p>
+            <div className="text-sm w-full md:w-1/2">
+               <p className="font-bold mb-3 border-b pb-2 text-gray-800 text-base">รวม {filteredTasks.length} รายการ</p>
                <table className="w-full text-left">
                  <tbody>
                    {filteredStats.filter(s => s.count > 0).map(s => (
                      <tr key={s.id} className="border-b border-dashed border-gray-200 last:border-0">
-                       <td className="py-2 flex items-center gap-2 truncate"><div className="w-3 h-3 rounded-sm border border-gray-200" style={{backgroundColor: s.color}}></div>{s.name}</td>
-                       <td className="py-2 text-right font-bold w-12">{s.count}</td>
-                       <td className="py-2 text-right text-gray-500 w-12">{s.percent}%</td>
+                       <td className="py-3 flex items-center gap-2 truncate"><div className="w-4 h-4 rounded-sm border border-gray-200 shadow-sm" style={{backgroundColor: s.color}}></div>{s.name}</td>
+                       <td className="py-3 text-right font-bold w-16 text-base">{s.count}</td>
+                       <td className="py-3 text-right text-gray-500 w-16">{s.percent}%</td>
                      </tr>
                    ))}
                  </tbody>
@@ -434,39 +390,41 @@ function PrintReport({ tasks, printData, onDone }) {
         </div>
       </div>
 
-      {/* Overdue Tasks Formal Table */}
-      <div className="mt-10 break-inside-avoid">
-        <h3 className="font-bold text-lg mb-4 flex items-center text-black border-b border-gray-300 pb-2">
-          สรุปสถานะใบงานที่ยังไม่ได้รับเอกสารวางบิล <span className="text-sm font-normal text-gray-500 ml-2">(ค้างเกิน 2 เดือน)</span>
+      {/* Filtered Tasks Formal Table */}
+      <div className="mt-10">
+        <h3 className="font-bold text-lg md:text-xl mb-4 flex items-center text-black border-b border-gray-300 pb-2">
+          รายละเอียดใบงานทั้งหมด <span className="text-sm md:text-base font-normal text-gray-500 ml-2">({filteredTasks.length} รายการ)</span>
         </h3>
-        {overdueBillingTasks.length > 0 ? (
+        {filteredTasks.length > 0 ? (
           <table className="w-full text-sm border-collapse border border-gray-400">
             <thead>
               <tr className="bg-gray-100 text-black">
-                <th className="border border-gray-400 p-3 w-12 text-center">ที่</th>
-                <th className="border border-gray-400 p-3 w-28 text-center">เลขที่ใบงาน</th>
-                <th className="border border-gray-400 p-3">โครงการ</th>
-                <th className="border border-gray-400 p-3">ร้านค้า</th>
-                <th className="border border-gray-400 p-3 w-28 text-center">วันนัดหมาย</th>
-                <th className="border border-gray-400 p-3">รายละเอียดการดำเนินงาน</th>
+                <th className="border border-gray-400 p-2 text-center w-10">ที่</th>
+                <th className="border border-gray-400 p-2 text-center w-24">เลขที่ใบงาน</th>
+                <th className="border border-gray-400 p-2 w-32">โครงการ</th>
+                <th className="border border-gray-400 p-2 w-32">ร้านค้า</th>
+                <th className="border border-gray-400 p-2 text-center w-24">วันนัดหมาย</th>
+                <th className="border border-gray-400 p-2 text-center w-24">สถานะล่าสุด</th>
+                <th className="border border-gray-400 p-2">รายละเอียด</th>
               </tr>
             </thead>
             <tbody>
-              {overdueBillingTasks.map((t, idx) => (
-                <tr key={t.id} className="hover:bg-gray-50">
-                  <td className="border border-gray-400 p-3 text-center text-gray-600">{idx + 1}</td>
-                  <td className="border border-gray-400 p-3 text-center font-bold text-black">{t.taskNo}</td>
-                  <td className="border border-gray-400 p-3">{t.project}</td>
-                  <td className="border border-gray-400 p-3">{t.company}</td>
-                  <td className="border border-gray-400 p-3 text-center">{t.aptDate}</td>
-                  <td className="border border-gray-400 p-3 text-gray-700 text-xs">{t.details || '-'}</td>
+              {filteredTasks.map((t, idx) => (
+                <tr key={t.id} className="hover:bg-gray-50 break-inside-avoid">
+                  <td className="border border-gray-400 p-2 text-center text-gray-600">{idx + 1}</td>
+                  <td className="border border-gray-400 p-2 text-center font-bold text-black whitespace-nowrap">{t.taskNo}</td>
+                  <td className="border border-gray-400 p-2">{t.project}</td>
+                  <td className="border border-gray-400 p-2">{t.company}</td>
+                  <td className="border border-gray-400 p-2 text-center whitespace-nowrap">{t.aptDate}</td>
+                  <td className="border border-gray-400 p-2 text-center font-semibold text-[11px] whitespace-nowrap">{t.status}</td>
+                  <td className="border border-gray-400 p-2 text-gray-700 text-xs">{t.details || '-'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         ) : (
           <div className="p-8 text-center border border-dashed border-gray-400 bg-gray-50">
-            <p className="text-gray-600 italic">-- ไม่มีรายการใบงานที่ค้างวางบิลเกิน 2 เดือน --</p>
+            <p className="text-gray-600 italic">-- ไม่มีรายการใบงานในตัวกรองนี้ --</p>
           </div>
         )}
       </div>
@@ -926,6 +884,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, trigg
   const [reportMonth, setReportMonth] = useState(availableMonths[0] || new Date().toISOString().slice(0, 7));
   const [reportProj, setReportProj] = useState('');
   const [reportComp, setReportComp] = useState('');
+  const [reportStatus, setReportStatus] = useState('');
 
   const handleExportExcel = () => {
     if (!window.XLSX) return;
@@ -968,24 +927,28 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, trigg
 
   return (
     <div className="space-y-8 mb-24 animate-in fade-in text-left">
-      <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col">
-        <h4 className="text-[10px] font-bold text-[#003366] mb-6 uppercase tracking-widest flex items-center"><Printer size={14} className="mr-2"/> ระบบออกรายงานและสำรองข้อมูล</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col">
+        <h4 className="text-[10px] md:text-xs font-bold text-[#003366] mb-6 uppercase tracking-widest flex items-center"><Printer size={16} className="mr-2"/> ระบบออกรายงานและสำรองข้อมูล</h4>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">ประจำเดือน</label>
-            <select value={reportMonth} onChange={e=>setReportMonth(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl text-sm border-none focus:ring-2 focus:ring-[#C5A059]"><option value="">ทุกเดือน</option>{availableMonths.map(m => <option key={m} value={m}>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}</option>)}</select>
+            <select value={reportMonth} onChange={e=>setReportMonth(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl text-xs md:text-sm border-none focus:ring-2 focus:ring-[#C5A059]"><option value="">ทุกเดือน</option>{availableMonths.map(m => <option key={m} value={m}>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}</option>)}</select>
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">โครงการ</label>
-            <select value={reportProj} onChange={e=>setReportProj(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl text-sm border-none focus:ring-2 focus:ring-[#C5A059]"><option value="">ทุกโครงการ</option>{settings.projects.map(p => <option key={p} value={p}>{p}</option>)}</select>
+            <select value={reportProj} onChange={e=>setReportProj(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl text-xs md:text-sm border-none focus:ring-2 focus:ring-[#C5A059]"><option value="">ทุกโครงการ</option>{settings.projects.map(p => <option key={p} value={p}>{p}</option>)}</select>
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">ร้านค้า</label>
-            <select value={reportComp} onChange={e=>setReportComp(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl text-sm border-none focus:ring-2 focus:ring-[#C5A059]"><option value="">ทุกร้านค้า</option>{settings.companies.map(c => <option key={c} value={c}>{c}</option>)}</select>
+            <select value={reportComp} onChange={e=>setReportComp(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl text-xs md:text-sm border-none focus:ring-2 focus:ring-[#C5A059]"><option value="">ทุกร้านค้า</option>{settings.companies.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">สถานะ</label>
+            <select value={reportStatus} onChange={e=>setReportStatus(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl text-xs md:text-sm border-none focus:ring-2 focus:ring-[#C5A059]"><option value="">ทุกสถานะ</option>{STATUSES.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}</select>
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-4">
-          <button onClick={() => triggerPrint({ selectedMonth: reportMonth, filterProj: reportProj, filterComp: reportComp })} className="flex-1 py-4 bg-[#003366] text-white rounded-2xl font-bold flex items-center justify-center space-x-2"><Printer size={18}/><span>พิมพ์รายงาน PDF แบบทางการ</span></button>
+          <button onClick={() => triggerPrint({ selectedMonth: reportMonth, filterProj: reportProj, filterComp: reportComp, filterStatus: reportStatus })} className="flex-1 py-4 bg-[#003366] text-white rounded-2xl font-bold flex items-center justify-center space-x-2"><Printer size={18}/><span>พิมพ์รายงาน PDF</span></button>
           <button onClick={handleExportExcel} className="flex-1 py-4 bg-[#10B981] text-white rounded-2xl font-bold flex items-center justify-center space-x-2"><FileDown size={18}/><span>ดาวน์โหลด Backup Excel</span></button>
         </div>
       </div>

@@ -44,13 +44,13 @@ const STATUSES = [
   { id: 6, name: 'ส่งเอกสารเบิกจ่ายแล้ว', color: '#10B981', bgColor: '#D1FAE5' }
 ];
 
-const isOverdue = (dateString) => {
-  if (!dateString) return false;
-  const taskDate = new Date(dateString);
-  taskDate.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return taskDate < today;
+const isOverdue = (task) => {
+  if (!task || !task.status) return false;
+  if (task.status !== 'จบงานและรอรับเอกสารวางบิล') return false;
+  const statusDate = task.statusUpdatedAt || task.updatedAt || task.createdAt;
+  if (!statusDate) return false;
+  const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+  return statusDate < oneMonthAgo;
 };
 
 const getMonthStr = (timestamp) => {
@@ -554,7 +554,7 @@ function Dashboard({ tasks, settings }) {
                           <span className="font-bold text-[#003366] text-base md:text-lg tracking-tight bg-clip-text group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:from-[#003366] group-hover:to-[#C5A059] transition-all duration-300">
                             {t.taskNo}
                           </span>
-                          {isOverdue(t.aptDate) && (
+                          {isOverdue(t) && (
                             <span className="bg-red-500/10 text-red-500 border border-red-500/20 text-[9px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.2)]">
                               เลยกำหนด
                             </span>
@@ -725,7 +725,7 @@ function Management({ tasks, settings, onSave, onDelete }) {
                 <tr key={t.id} className="hover:bg-gray-50">
                   <td className="px-6 py-5 font-bold text-[#003366] truncate pr-2">
                     <span className="block truncate">{t.taskNo}</span>
-                    {isOverdue(t.aptDate) && <span className="bg-red-100 text-red-600 text-[9px] px-2 py-0.5 rounded-md mt-1 w-max block">เกินกำหนด</span>}
+                    {isOverdue(t) && <span className="bg-red-100 text-red-600 text-[9px] px-2 py-0.5 rounded-md mt-1 w-max block">เกินกำหนด</span>}
                     {t.status === 'จบงานและรอรับเอกสารวางบิล' && <span className="text-[9px] text-orange-500 mt-1 block">* วางบิลก่อน 15</span>}
                   </td>
                   <td className="px-6 py-5 text-gray-500 truncate pr-2" title={t.project}>{t.project}</td>
@@ -751,7 +751,7 @@ function Management({ tasks, settings, onSave, onDelete }) {
                 <div className="flex flex-col min-w-0 pr-2">
                   <div className="flex items-center space-x-2 mb-1">
                     <span className="font-bold text-[#003366] text-base truncate">{t.taskNo}</span>
-                    {isOverdue(t.aptDate) && <span className="bg-red-500/10 text-red-500 text-[9px] px-2 py-0.5 rounded-md font-bold">เลยกำหนด</span>}
+                    {isOverdue(t) && <span className="bg-red-500/10 text-red-500 text-[9px] px-2 py-0.5 rounded-md font-bold">เลยกำหนด</span>}
                   </div>
                   <div className="text-[11px] text-gray-500 truncate flex items-center space-x-1"><Building2 size={10} className="text-[#003366]"/><span>{t.project}</span></div>
                 </div>
@@ -829,7 +829,7 @@ function CalendarView({ tasks }) {
             <div key={i} onClick={() => d && setSelectedDayTasks({ date: dateStr, displayDate: d, tks })} className={`bg-white min-h-[70px] md:min-h-[120px] p-1.5 md:p-3 text-left ${d ? 'cursor-pointer hover:bg-gray-50/80' : 'bg-gray-50/20'}`}>
               {d && <div className={`text-[10px] md:text-xs mb-1 font-bold`}>{d}</div>}
               <div className="space-y-1">
-                {tks.slice(0, 3).map(t=>(<div key={t.id} className={`text-[8px] text-white p-1 rounded-md truncate font-bold ${isOverdue(t.aptDate) ? 'bg-red-500' : 'bg-[#003366]'}`}>{t.taskNo}</div>))}
+                {tks.slice(0, 3).map(t=>(<div key={t.id} className={`text-[8px] text-white p-1 rounded-md truncate font-bold ${isOverdue(t) ? 'bg-red-500' : 'bg-[#003366]'}`}>{t.taskNo}</div>))}
                 {tks.length > 3 && <div className="text-[9px] text-gray-400 font-bold text-center mt-1">+{tks.length - 3} งาน</div>}
               </div>
             </div>
@@ -849,7 +849,7 @@ function CalendarView({ tasks }) {
                   <div key={t.id} className="p-5 border border-gray-100 rounded-2xl bg-gray-50/50">
                      <div className="flex items-center space-x-2">
                         <span className="font-bold text-[#003366] text-lg">{t.taskNo}</span>
-                        {isOverdue(t.aptDate) && <span className="bg-red-100 text-red-600 text-[9px] px-2 py-0.5 rounded-md font-bold">เลยกำหนด</span>}
+                        {isOverdue(t) && <span className="bg-red-100 text-red-600 text-[9px] px-2 py-0.5 rounded-md font-bold">เลยกำหนด</span>}
                      </div>
                      <div className="text-[10px] text-gray-400 font-bold uppercase mt-1">{t.project}</div>
                      <div className="mb-4 mt-2"><StatusTag label={t.status} /></div>

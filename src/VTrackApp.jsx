@@ -282,6 +282,7 @@ function TaskDetailView({ task, onClose }) {
         <DetailField label="พื้นที่" value={task.area} />
         <DetailField label="วันนัดหมายเข้างาน" value={task.aptDate} />
         <DetailField label="วันทำจ่าย" value={task.payDate} />
+        <DetailField label="ค่าใช้จ่าย (บาท)" value={task.cost} />
         <div className="md:col-span-2">
           <DetailField label="รายละเอียดงาน" value={task.details} />
         </div>
@@ -405,6 +406,7 @@ function PrintReport({ tasks, printData, onDone }) {
                 <th className="border border-gray-400 p-2 w-32">ร้านค้า</th>
                 <th className="border border-gray-400 p-2 text-center w-24">วันนัดหมาย</th>
                 <th className="border border-gray-400 p-2 text-center w-24">สถานะล่าสุด</th>
+                <th className="border border-gray-400 p-2 text-center w-20">ค่าใช้จ่าย</th>
                 <th className="border border-gray-400 p-2">รายละเอียด</th>
               </tr>
             </thead>
@@ -417,6 +419,7 @@ function PrintReport({ tasks, printData, onDone }) {
                   <td className="border border-gray-400 p-2">{t.company}</td>
                   <td className="border border-gray-400 p-2 text-center whitespace-nowrap">{t.aptDate}</td>
                   <td className="border border-gray-400 p-2 text-center font-semibold text-[11px] whitespace-nowrap">{t.status}</td>
+                  <td className="border border-gray-400 p-2 text-center text-xs whitespace-nowrap">{t.cost ? (isNaN(t.cost) ? t.cost : Number(t.cost).toLocaleString()) : '-'}</td>
                   <td className="border border-gray-400 p-2 text-gray-700 text-xs">{t.details || '-'}</td>
                 </tr>
               ))}
@@ -617,7 +620,7 @@ function Dashboard({ tasks, settings }) {
 
 // ------------------- Editable Form (For Admin) -------------------
 function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = null, isModal = false }) {
-  const [d, setD] = useState(initialData || { taskNo: '', project: '', company: '', area: AREAS[0], status: STATUSES[0].name, aptDate: '', payDate: '', details: '' });
+  const [d, setD] = useState(initialData || { taskNo: '', project: '', company: '', area: AREAS[0], status: STATUSES[0].name, aptDate: '', payDate: '', cost: '', details: '' });
   const sub = async (e) => { e.preventDefault(); await onSave(d, !!initialData, initialData?.id); onSuccess(); };
 
   return (
@@ -637,6 +640,7 @@ function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = 
         <div className="md:col-span-2"><Field label="สถานะการดำเนินงาน"><select className="input-style" value={d.status} onChange={e=>setD({...d, status: e.target.value})}>{STATUSES.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}</select></Field></div>
         <Field label="วันนัดหมาย"><input type="date" className="input-style" value={d.aptDate} onChange={e=>setD({...d, aptDate: e.target.value})}/></Field>
         <Field label="วันทำจ่าย"><input type="date" className="input-style" value={d.payDate} onChange={e=>setD({...d, payDate: e.target.value})}/></Field>
+        <div className="md:col-span-2"><Field label="ค่าใช้จ่าย (บาท)"><input type="text" className="input-style" value={d.cost || ''} onChange={e=>setD({...d, cost: e.target.value})} placeholder="ระบุค่าใช้จ่าย (ถ้ามี)"/></Field></div>
         <div className="md:col-span-2"><Field label="รายละเอียด"><textarea rows="3" className="input-style resize-none" value={d.details} onChange={e=>setD({...d, details: e.target.value})}></textarea></Field></div>
       </div>
       
@@ -715,7 +719,8 @@ function Management({ tasks, settings, onSave, onDelete }) {
               <tr>
                 <th className="w-2/12 px-6 py-5">เลขที่ใบงาน</th>
                 <th className="w-3/12 px-6 py-5">โครงการ</th>
-                <th className="w-3/12 px-6 py-5">รายละเอียด</th>
+                <th className="w-2/12 px-6 py-5">รายละเอียด</th>
+                <th className="w-1/12 px-6 py-5 text-right">ค่าใช้จ่าย</th>
                 <th className="w-2/12 px-6 py-5 text-center">สถานะ</th>
                 <th className="w-2/12 px-6 py-5 text-center">จัดการ</th>
               </tr>
@@ -730,6 +735,7 @@ function Management({ tasks, settings, onSave, onDelete }) {
                   </td>
                   <td className="px-6 py-5 text-gray-500 truncate pr-2" title={t.project}>{t.project}</td>
                   <td className="px-6 py-5 text-gray-500 text-xs truncate pr-2" title={t.details}>{t.details || '-'}</td>
+                  <td className="px-6 py-5 text-right font-semibold text-[#003366] whitespace-nowrap">{t.cost ? (isNaN(t.cost) ? t.cost : Number(t.cost).toLocaleString()) : '-'}</td>
                   <td className="px-6 py-5 text-center"><StatusTag label={t.status}/></td>
                   <td className="px-6 py-5 text-center space-x-2">
                     <button onClick={()=>setEdit(t)} className="p-2 text-gray-400 hover:text-[#C5A059]"><Edit size={18}/></button>
@@ -761,7 +767,10 @@ function Management({ tasks, settings, onSave, onDelete }) {
               {t.details && <div className="text-xs text-gray-500 bg-gray-50/80 p-3 rounded-xl border border-gray-100 line-clamp-2 pl-2 mx-2">{t.details}</div>}
               
               <div className="flex justify-between items-center mt-2 pl-2">
-                <div className="text-[10px] text-gray-400 font-bold bg-gray-50 px-2 py-1.5 rounded-lg flex items-center space-x-1 border border-gray-100"><MapPin size={10}/><span>{t.area}</span></div>
+                <div className="flex gap-2">
+                  <div className="text-[10px] text-gray-400 font-bold bg-gray-50 px-2 py-1.5 rounded-lg flex items-center space-x-1 border border-gray-100"><MapPin size={10}/><span>{t.area}</span></div>
+                  {t.cost && <div className="text-[10px] text-green-600 font-bold bg-green-50 px-2 py-1.5 rounded-lg flex items-center space-x-1 border border-green-100"><span>฿ {isNaN(t.cost) ? t.cost : Number(t.cost).toLocaleString()}</span></div>}
+                </div>
                 <div className="flex space-x-2">
                   <button onClick={()=>setEdit(t)} className="p-2.5 bg-gray-50 rounded-xl text-gray-500 hover:text-[#C5A059] hover:bg-gray-100 transition-colors"><Edit size={16}/></button>
                   <button onClick={()=>{ if(window.confirm('ลบใบงาน?')) onDelete(t.id, 'User Delete') }} className="p-2.5 bg-red-50 rounded-xl text-red-400 hover:text-red-600 hover:bg-red-100 transition-colors"><Trash2 size={16}/></button>
@@ -890,7 +899,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, trigg
     if (!window.XLSX) return;
     const ws = window.XLSX.utils.json_to_sheet(tasks.filter(t => !t.isDeleted).map(t => ({
       'เลขที่ใบงาน': t.taskNo, 'โครงการ': t.project, 'บริษัท': t.company, 'พื้นที่': t.area,
-      'สถานะ': t.status, 'นัดหมาย': t.aptDate, 'วันทำจ่าย': t.payDate, 'รายละเอียด': t.details
+      'สถานะ': t.status, 'นัดหมาย': t.aptDate, 'วันทำจ่าย': t.payDate, 'ค่าใช้จ่าย': t.cost, 'รายละเอียด': t.details
     })));
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, "VTrack_Backup");
@@ -914,7 +923,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, trigg
         for (const row of res.data) {
           const getV = (ks) => { const k = Object.keys(row).find(x => ks.includes(x.trim())); return k ? row[k].toString().trim() : ''; };
           const tNo = getV(['เลขที่ใบงาน', 'taskNo', 'เลขที่']); if (!tNo) continue;
-          const tData = { taskNo: tNo, project: getV(['โครงการ', 'project']), company: getV(['บริษัท', 'company']), area: getV(['พื้นที่', 'area']) || AREAS[0], status: getV(['สถานะ', 'status']) || STATUSES[0].name, aptDate: getV(['วันนัดหมาย', 'aptDate']), payDate: getV(['วันทำจ่าย']), details: getV(['รายละเอียด', 'details']) };
+          const tData = { taskNo: tNo, project: getV(['โครงการ', 'project']), company: getV(['บริษัท', 'company']), area: getV(['พื้นที่', 'area']) || AREAS[0], status: getV(['สถานะ', 'status']) || STATUSES[0].name, aptDate: getV(['วันนัดหมาย', 'aptDate']), payDate: getV(['วันทำจ่าย']), cost: getV(['ค่าใช้จ่าย', 'cost']), details: getV(['รายละเอียด', 'details']) };
           if (tData.project && !newP.includes(tData.project)) newP.push(tData.project);
           if (tData.company && !newC.includes(tData.company)) newC.push(tData.company);
           const ex = tasks.find(t => t.taskNo === tNo && !t.isDeleted);

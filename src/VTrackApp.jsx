@@ -55,7 +55,18 @@ const isOverdue = (task) => {
 
 const getMonthStr = (timestamp) => {
   if (!timestamp) return '';
-  try { return new Date(timestamp).toISOString().slice(0, 7); } catch { return ''; }
+  let ts = timestamp;
+  if (typeof ts === 'string' && ts.includes('-')) {
+    let [y, m, d] = ts.split('-');
+    if (y && m && d) {
+      let year = parseInt(y, 10);
+      if (year < 100) year += 2000;
+      else if (year >= 2500) year -= 543;
+      if (year < 2000 || year > 2100) year = new Date().getFullYear();
+      ts = `${year}-${m}-${d}`;
+    }
+  }
+  try { return new Date(ts).toISOString().slice(0, 7); } catch { return ''; }
 };
 
 // --- Main Application Component ---
@@ -119,7 +130,23 @@ export default function App() {
 
   const saveTask = async (taskData, isEdit = false, taskId = null) => {
     const tasksRef = collection(db, 'artifacts', appId, 'public', 'data', 'vtrack_tasks');
+    
+    // Normalize dates
+    const normD = (dStr) => {
+      if (!dStr) return dStr;
+      let [y, m, d] = dStr.split('-');
+      if (!y || !m || !d) return dStr;
+      let year = parseInt(y, 10);
+      if (year < 100) year += 2000;
+      else if (year >= 2500) year -= 543;
+      if (year < 2000 || year > 2100) year = new Date().getFullYear();
+      return `${year}-${m}-${d}`;
+    };
+
     let finalData = { ...taskData };
+    if (finalData.aptDate) finalData.aptDate = normD(finalData.aptDate);
+    if (finalData.payDate) finalData.payDate = normD(finalData.payDate);
+
     if (isEdit && taskId) {
       const oldTask = tasks.find(t => t.id === taskId);
       if (oldTask && oldTask.status !== taskData.status) {

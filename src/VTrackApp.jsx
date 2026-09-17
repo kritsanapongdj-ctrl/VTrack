@@ -317,7 +317,7 @@ function PrintReport({ tasks, printData, onDone }) {
 
   // Filter tasks based on month/proj/comp/status
   const filteredTasks = activeTasks.filter(t => {
-    const tMonth = getMonthStr(t.createdAt);
+    const tMonth = getMonthStr(t.aptDate || t.createdAt);
     const monthMatch = selectedMonth ? (tMonth === selectedMonth) : true;
     const projMatch = filterProj ? t.project === filterProj : true;
     const compMatch = filterComp ? t.company === filterComp : true;
@@ -447,7 +447,7 @@ function Dashboard({ tasks, settings }) {
   const [viewTask, setViewTask] = useState(null); // ใช้ State สำหรับดูรายละเอียดแทน Edit
 
   const availableMonths = useMemo(() => {
-    const months = tasks.map(t => getMonthStr(t.createdAt)).filter(m => m !== '');
+    const months = tasks.map(t => getMonthStr(t.aptDate || t.createdAt)).filter(m => m !== '');
     return [...new Set([new Date().toISOString().slice(0, 7), ...months])].sort().reverse();
   }, [tasks]);
 
@@ -457,7 +457,7 @@ function Dashboard({ tasks, settings }) {
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
-      const tMonth = getMonthStr(t.createdAt);
+      const tMonth = getMonthStr(t.aptDate || t.createdAt);
       return !t.isDeleted && tMonth === selectedMonth && (filterProj ? t.project === filterProj : true) && (filterComp ? t.company === filterComp : true);
     });
   }, [tasks, selectedMonth, filterProj, filterComp]);
@@ -672,7 +672,7 @@ function Management({ tasks, settings, onSave, onDelete }) {
   const itemsPerPage = 10;
 
   const availableMonths = useMemo(() => {
-    const months = tasks.map(t => getMonthStr(t.createdAt)).filter(m => m !== '');
+    const months = tasks.map(t => getMonthStr(t.aptDate || t.createdAt)).filter(m => m !== '');
     return [...new Set(months)].sort().reverse();
   }, [tasks]);
   
@@ -680,7 +680,7 @@ function Management({ tasks, settings, onSave, onDelete }) {
     return tasks.filter(t => {
       if (t.isDeleted) return false;
       const matchSearch = search === '' || t.taskNo.toLowerCase().includes(search.toLowerCase()) || t.project.toLowerCase().includes(search.toLowerCase());
-      const tMonth = getMonthStr(t.createdAt);
+      const tMonth = getMonthStr(t.aptDate || t.createdAt);
       const matchMonth = filterMonth === '' || tMonth === filterMonth;
       const matchProj = filterProject === '' || t.project === filterProject;
       const matchComp = filterCompany === '' || t.company === filterCompany;
@@ -887,7 +887,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, trigg
   const [p, setP] = useState(''); const [c, setC] = useState(''); const [st, setSt] = useState('');
   
   const availableMonths = useMemo(() => {
-    const months = tasks.map(t => getMonthStr(t.createdAt)).filter(m => m !== '');
+    const months = tasks.map(t => getMonthStr(t.aptDate || t.createdAt)).filter(m => m !== '');
     return [...new Set([new Date().toISOString().slice(0, 7), ...months])].sort().reverse();
   }, [tasks]);
   const [reportMonth, setReportMonth] = useState(availableMonths[0] || new Date().toISOString().slice(0, 7));

@@ -69,6 +69,65 @@ const getMonthStr = (timestamp) => {
   try { return new Date(ts).toISOString().slice(0, 7); } catch { return ''; }
 };
 
+const getEffectiveMonth = (task) => {
+  if (!task) return '';
+  const isCompleted = task.status === 'ส่งเอกสารเบิกจ่ายแล้ว' && !!task.payDate;
+  const baseMonth = getMonthStr(task.aptDate || task.createdAt);
+  const currentMonth = getMonthStr(Date.now());
+
+  if (isCompleted) {
+    return getMonthStr(task.statusUpdatedAt || task.payDate || task.aptDate || task.createdAt);
+  } else {
+    if (baseMonth && baseMonth < currentMonth) {
+      return currentMonth;
+    }
+    return baseMonth;
+  }
+};
+
+const isCarryOver = (task) => {
+  if (!task) return false;
+  const isCompleted = task.status === 'ส่งเอกสารเบิกจ่ายแล้ว' && !!task.payDate;
+  if (isCompleted) return false;
+  const baseMonth = getMonthStr(task.aptDate || task.createdAt);
+  const currentMonth = getMonthStr(Date.now());
+  return baseMonth && baseMonth < currentMonth;
+};
+
+const getOriginalMonthStr = (task) => {
+  if (!task) return '';
+  const baseMonth = getMonthStr(task.aptDate || task.createdAt);
+  return new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(baseMonth));
+};
+
+function InlineStatusSelect({ task, onSave }) {
+  const s = STATUSES.find(x => x.name === task.status);
+  
+  const handleChange = (e) => {
+    const newStatus = e.target.value;
+    if (newStatus === task.status) return;
+    onSave({ ...task, status: newStatus }, true, task.id);
+  };
+  
+  return (
+    <div className="relative inline-block w-full max-w-[150px]">
+      <select 
+        value={task.status} 
+        onChange={handleChange}
+        className="w-full appearance-none px-3 py-1.5 rounded-full text-[10px] font-bold border border-white shadow-sm cursor-pointer outline-none focus:ring-2 focus:ring-[#C5A059]"
+        style={{backgroundColor: s?.bgColor || '#f3f4f6', color: s?.color || '#374151'}}
+      >
+        {STATUSES.map(st => (
+          <option key={st.id} value={st.name}>{st.name}</option>
+        ))}
+      </select>
+      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+      </div>
+    </div>
+  );
+}
+
 // --- Main Application Component ---
 export default function App() {
   const [user, setUser] = useState(null);
@@ -82,15 +141,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [systemError, setSystemError] = useState('');
 
-  useEffect(() => {
-    const loadScript = (id, src) => {
-      if (!document.getElementById(id)) {
-        const s = document.createElement('script'); s.id = id; s.src = src; document.body.appendChild(s);
-      }
-    };
-    loadScript('papaparse-script', 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js');
-    loadScript('xlsx-script', 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
-  }, []);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -344,7 +394,7 @@ function PrintReport({ tasks, printData, onDone }) {
 
   // Filter tasks based on month/proj/comp/status
   const filteredTasks = activeTasks.filter(t => {
-    const tMonth = getMonthStr(t.aptDate || t.createdAt);
+    const tMonth = getEffectiveMonth(t);
     const monthMatch = selectedMonth ? (tMonth === selectedMonth) : true;
     const projMatch = filterProj ? t.project === filterProj : true;
     const compMatch = filterComp ? t.company === filterComp : true;
@@ -474,7 +524,7 @@ function Dashboard({ tasks, settings }) {
   const [viewTask, setViewTask] = useState(null); // ใช้ State สำหรับดูรายละเอียดแทน Edit
 
   const availableMonths = useMemo(() => {
-    const months = tasks.map(t => getMonthStr(t.aptDate || t.createdAt)).filter(m => m !== '');
+    const months = tasks.map(t => getEffectiveMonth(t)).filter(m => m !== '');
     return [...new Set([new Date().toISOString().slice(0, 7), ...months])].sort().reverse();
   }, [tasks]);
 
@@ -484,7 +534,7 @@ function Dashboard({ tasks, settings }) {
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
-      const tMonth = getMonthStr(t.aptDate || t.createdAt);
+      const tMonth = getEffectiveMonth(t);
       return !t.isDeleted && tMonth === selectedMonth && (filterProj ? t.project === filterProj : true) && (filterComp ? t.company === filterComp : true);
     });
   }, [tasks, selectedMonth, filterProj, filterComp]);
@@ -589,6 +639,11 @@ function Dashboard({ tasks, settings }) {
                               เลยกำหนด
                             </span>
                           )}
+                          {isCarryOver(t) && (
+                            <span className="bg-orange-500/10 text-orange-600 border border-orange-500/20 text-[9px] px-2.5 py-1 rounded-full font-bold tracking-wider shadow-[0_0_10px_rgba(249,115,22,0.15)]">
+                              งานค้างจากเดือน {getOriginalMonthStr(t)}
+                            </span>
+                          )}
                         </div>
                         
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-1 text-gray-500">
@@ -650,6 +705,16 @@ function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = 
   const [d, setD] = useState(initialData || { taskNo: '', project: '', company: '', area: AREAS[0], status: STATUSES[0].name, aptDate: '', payDate: '', cost: '', details: '' });
   const sub = async (e) => { e.preventDefault(); await onSave(d, !!initialData, initialData?.id); onSuccess(); };
 
+  const handleCostChange = (e) => {
+    let val = e.target.value.replace(/[^0-9.]/g, '');
+    if (val) {
+      const parts = val.split('.');
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      val = parts.join('.');
+    }
+    setD({ ...d, cost: val });
+  };
+
   return (
     <form onSubmit={sub} className={`bg-white p-6 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-6 w-full max-w-3xl mx-auto ${isModal ? '' : 'mb-24'}`}>
       <div className="flex items-center space-x-4 mb-2">
@@ -667,7 +732,7 @@ function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = 
         <div className="md:col-span-2"><Field label="สถานะการดำเนินงาน"><select className="input-style" value={d.status} onChange={e=>setD({...d, status: e.target.value})}>{STATUSES.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}</select></Field></div>
         <Field label="วันนัดหมาย"><input type="date" className="input-style" value={d.aptDate} onChange={e=>setD({...d, aptDate: e.target.value})}/></Field>
         <Field label="วันทำจ่าย"><input type="date" className="input-style" value={d.payDate} onChange={e=>setD({...d, payDate: e.target.value})}/></Field>
-        <div className="md:col-span-2"><Field label="ค่าใช้จ่าย (บาท)"><input type="text" className="input-style" value={d.cost || ''} onChange={e=>setD({...d, cost: e.target.value})} placeholder="ระบุค่าใช้จ่าย (ถ้ามี)"/></Field></div>
+        <div className="md:col-span-2"><Field label="ค่าใช้จ่าย (บาท)"><input type="text" className="input-style" value={d.cost || ''} onChange={handleCostChange} placeholder="ระบุค่าใช้จ่าย (ถ้ามี)"/></Field></div>
         <div className="md:col-span-2"><Field label="รายละเอียด"><textarea rows="3" className="input-style resize-none" value={d.details} onChange={e=>setD({...d, details: e.target.value})}></textarea></Field></div>
       </div>
       
@@ -699,7 +764,7 @@ function Management({ tasks, settings, onSave, onDelete }) {
   const itemsPerPage = 10;
 
   const availableMonths = useMemo(() => {
-    const months = tasks.map(t => getMonthStr(t.aptDate || t.createdAt)).filter(m => m !== '');
+    const months = tasks.map(t => getEffectiveMonth(t)).filter(m => m !== '');
     return [...new Set(months)].sort().reverse();
   }, [tasks]);
   
@@ -707,7 +772,7 @@ function Management({ tasks, settings, onSave, onDelete }) {
     return tasks.filter(t => {
       if (t.isDeleted) return false;
       const matchSearch = search === '' || t.taskNo.toLowerCase().includes(search.toLowerCase()) || t.project.toLowerCase().includes(search.toLowerCase());
-      const tMonth = getMonthStr(t.aptDate || t.createdAt);
+      const tMonth = getEffectiveMonth(t);
       const matchMonth = filterMonth === '' || tMonth === filterMonth;
       const matchProj = filterProject === '' || t.project === filterProject;
       const matchComp = filterCompany === '' || t.company === filterCompany;
@@ -758,12 +823,13 @@ function Management({ tasks, settings, onSave, onDelete }) {
                   <td className="px-6 py-5 font-bold text-[#003366] truncate pr-2">
                     <span className="block truncate">{t.taskNo}</span>
                     {isOverdue(t) && <span className="bg-red-100 text-red-600 text-[9px] px-2 py-0.5 rounded-md mt-1 w-max block">เกินกำหนด</span>}
+                    {isCarryOver(t) && <span className="bg-orange-100 text-orange-600 text-[9px] px-2 py-0.5 rounded-md mt-1 w-max block">งานค้างจาก {getOriginalMonthStr(t)}</span>}
                     {t.status === 'จบงานและรอรับเอกสารวางบิล' && <span className="text-[9px] text-orange-500 mt-1 block">* วางบิลก่อน 15</span>}
                   </td>
                   <td className="px-6 py-5 text-gray-500 truncate pr-2" title={t.project}>{t.project}</td>
                   <td className="px-6 py-5 text-gray-500 text-xs truncate pr-2" title={t.details}>{t.details || '-'}</td>
                   <td className="px-6 py-5 text-right font-semibold text-[#003366] whitespace-nowrap">{t.cost ? (isNaN(t.cost) ? t.cost : Number(t.cost).toLocaleString()) : '-'}</td>
-                  <td className="px-6 py-5 text-center"><StatusTag label={t.status}/></td>
+                  <td className="px-6 py-5 text-center"><InlineStatusSelect task={t} onSave={onSave} /></td>
                   <td className="px-6 py-5 text-center space-x-2">
                     <button onClick={()=>setEdit(t)} className="p-2 text-gray-400 hover:text-[#C5A059]"><Edit size={18}/></button>
                     <button onClick={()=>{ if(window.confirm('ลบใบงาน?')) onDelete(t.id, 'User Delete') }} className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={18}/></button>
@@ -785,10 +851,11 @@ function Management({ tasks, settings, onSave, onDelete }) {
                   <div className="flex items-center space-x-2 mb-1">
                     <span className="font-bold text-[#003366] text-base truncate">{t.taskNo}</span>
                     {isOverdue(t) && <span className="bg-red-500/10 text-red-500 text-[9px] px-2 py-0.5 rounded-md font-bold">เลยกำหนด</span>}
+                    {isCarryOver(t) && <span className="bg-orange-500/10 text-orange-600 text-[9px] px-2 py-0.5 rounded-md font-bold">งานค้างจาก {getOriginalMonthStr(t)}</span>}
                   </div>
                   <div className="text-[11px] text-gray-500 truncate flex items-center space-x-1"><Building2 size={10} className="text-[#003366]"/><span>{t.project}</span></div>
                 </div>
-                <div className="shrink-0 mt-1"><StatusTag label={t.status} /></div>
+                <div className="shrink-0 mt-1"><InlineStatusSelect task={t} onSave={onSave} /></div>
               </div>
               
               {t.details && <div className="text-xs text-gray-500 bg-gray-50/80 p-3 rounded-xl border border-gray-100 line-clamp-2 pl-2 mx-2">{t.details}</div>}
@@ -911,10 +978,20 @@ function CalendarView({ tasks }) {
 }
 
 function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, triggerPrint }) {
+  useEffect(() => {
+    const loadScript = (id, src) => {
+      if (!document.getElementById(id)) {
+        const s = document.createElement('script'); s.id = id; s.src = src; document.body.appendChild(s);
+      }
+    };
+    loadScript('papaparse-script', 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js');
+    loadScript('xlsx-script', 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+  }, []);
+
   const [p, setP] = useState(''); const [c, setC] = useState(''); const [st, setSt] = useState('');
   
   const availableMonths = useMemo(() => {
-    const months = tasks.map(t => getMonthStr(t.aptDate || t.createdAt)).filter(m => m !== '');
+    const months = tasks.map(t => getEffectiveMonth(t)).filter(m => m !== '');
     return [...new Set([new Date().toISOString().slice(0, 7), ...months])].sort().reverse();
   }, [tasks]);
   const [reportMonth, setReportMonth] = useState(availableMonths[0] || new Date().toISOString().slice(0, 7));

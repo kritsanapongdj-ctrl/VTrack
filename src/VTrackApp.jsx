@@ -5,7 +5,7 @@ import {
   Upload, Search, Edit, Trash2, X, AlertCircle, Menu, ChevronLeft, ChevronRight, 
   User, Filter, CalendarDays, FileDown, Printer, Trash, MapPin, Building2, Briefcase,
   Paperclip, PenTool, CheckCircle2, Clock, AlertTriangle, ArrowRight, Download,
-  Lock, Unlock, HardDrive, History, Eye, RotateCcw, ShieldCheck
+  Lock, Unlock, HardDrive, History, Eye, RotateCcw, ShieldCheck, DollarSign, Radio, Sparkles
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -224,7 +224,7 @@ const getOriginalMonthStr = (task) => {
   return new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(baseMonth));
 };
 
-function InlineStatusSelect({ task, onSave, onRequestCancel }) {
+function InlineStatusSelect({ task, onSave, onRequestCancel, onRequestDisbursement }) {
   const s = STATUSES.find(x => x.name === task.status);
   
   const handleChange = (e) => {
@@ -233,6 +233,12 @@ function InlineStatusSelect({ task, onSave, onRequestCancel }) {
     if (newStatus === 'ยกเลิก') {
       if (onRequestCancel) onRequestCancel(task);
       return;
+    }
+    if (newStatus === 'ส่งเอกสารเบิกจ่ายแล้ว') {
+      if (onRequestDisbursement) {
+        onRequestDisbursement(task);
+        return;
+      }
     }
     const updatedTimeline = appendTimelineEvent(task.timeline, {
       type: 'status_change',
@@ -281,6 +287,7 @@ export default function App() {
   const [taskOrderModalTask, setTaskOrderModalTask] = useState(null);
   const [rescheduleModalTask, setRescheduleModalTask] = useState(null);
   const [passcodeModal, setPasscodeModal] = useState({ isOpen: false, title: '', onSuccess: null });
+  const [disbursementModalTask, setDisbursementModalTask] = useState(null);
   const [viewDetailTask, setViewDetailTask] = useState(null);
 
   useEffect(() => {
@@ -558,6 +565,33 @@ export default function App() {
     alert("กู้คืนรายการใบงานเรียบร้อยแล้ว");
   };
 
+  const handleConfirmDisbursement = async (task, payDate, note) => {
+    if (!task || !payDate) return;
+    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'vtrack_tasks', task.id);
+    const updatedTimeline = appendTimelineEvent(task.timeline, {
+      type: 'status_change',
+      from: task.status,
+      to: 'ส่งเอกสารเบิกจ่ายแล้ว',
+      note: `ส่งเอกสารเบิกจ่ายแล้ว (กำหนดวันทำจ่าย: ${payDate})${note ? ` [หมายเหตุ: ${note}]` : ''}`
+    });
+    const updatePayload = {
+      status: 'ส่งเอกสารเบิกจ่ายแล้ว',
+      payDate: payDate,
+      statusUpdatedAt: Date.now(),
+      updatedAt: Date.now(),
+      timeline: updatedTimeline
+    };
+    if (note) updatePayload.disbursementNote = note;
+    await updateDoc(docRef, updatePayload);
+    setDisbursementModalTask(null);
+    if (viewDetailTask && viewDetailTask.id === task.id) {
+      setViewDetailTask(prev => ({
+        ...prev,
+        ...updatePayload
+      }));
+    }
+  };
+
   const handleRequestDownload = (url, filename) => {
     if (!url) return;
     if (isUnlocked) {
@@ -648,6 +682,7 @@ export default function App() {
                     onDelete={(t) => setCancelModalTask(t)}
                     onViewDetail={(t) => setViewDetailTask(t)}
                     onRequestCancel={(t) => setCancelModalTask(t)}
+                    onRequestDisbursement={(t) => setDisbursementModalTask(t)}
                   />
                 )}
                 {activeTab === 'calendar' && (
@@ -684,9 +719,14 @@ export default function App() {
 
       {/* Global Modals for V2 Operations */}
       {viewDetailTask && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center z-[70] p-0 md:p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center z-[70] p-0 md:p-4 overflow-y-auto">
           <div className="relative w-full max-w-3xl mt-16 md:mt-0 animate-in slide-in-from-bottom-full md:zoom-in-95 duration-300">
-            <button onClick={() => setViewDetailTask(null)} className="absolute top-6 right-6 md:top-8 md:right-8 z-10 p-2 bg-gray-100 rounded-full hover:bg-gray-200 text-gray-600 shadow-sm"><X size={20}/></button>
+            <button 
+              onClick={() => setViewDetailTask(null)} 
+              className={`absolute top-6 right-6 md:top-8 md:right-8 z-20 p-2 rounded-full shadow-sm transition-colors ${!isUnlocked ? 'bg-black/60 text-pink-300 hover:bg-black/90 hover:text-white border border-pink-500/40' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}
+            >
+              <X size={20}/>
+            </button>
             <TaskDetailView 
               task={viewDetailTask} 
               onClose={() => setViewDetailTask(null)}
@@ -696,6 +736,8 @@ export default function App() {
               onOpenReschedule={(t) => setRescheduleModalTask(t)}
               onRequestCancel={(t) => setCancelModalTask(t)}
               onRequestDownload={handleRequestDownload}
+              onRequestDisbursement={(t) => setDisbursementModalTask(t)}
+              isUnlocked={isUnlocked}
             />
           </div>
         </div>
@@ -734,6 +776,13 @@ export default function App() {
         onClose={() => setPasscodeModal({ isOpen: false, title: '', onSuccess: null })} 
         onSuccess={passcodeModal.onSuccess} 
         title={passcodeModal.title} 
+      />
+
+      <PaymentDateModal 
+        task={disbursementModalTask} 
+        isOpen={!!disbursementModalTask} 
+        onClose={() => setDisbursementModalTask(null)} 
+        onConfirm={handleConfirmDisbursement} 
       />
     </div>
   );
@@ -820,6 +869,128 @@ function AdminPasscodeModal({ isOpen, onClose, onSuccess, title = "กรุณ�
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-gray-100 text-gray-600 hover:bg-gray-200">ยกเลิก</button>
             <button type="submit" className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-[#003366] text-white hover:bg-[#002244]">ยืนยันรหัส</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function PaymentDateModal({ task, isOpen, onClose, onConfirm }) {
+  const [payDate, setPayDate] = useState('');
+  const [note, setNote] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (task) {
+      setPayDate(task.payDate || new Date().toISOString().slice(0, 10));
+      setNote(task.disbursementNote || '');
+    }
+  }, [task, isOpen]);
+
+  if (!isOpen || !task) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!payDate) return;
+    setLoading(true);
+    await onConfirm(task, payDate, note.trim());
+    setLoading(false);
+    onClose();
+  };
+
+  const setPreset = (daysFromNow) => {
+    const d = new Date();
+    d.setDate(d.getDate() + daysFromNow);
+    setPayDate(d.toISOString().slice(0, 10));
+  };
+
+  const setEndOfMonth = () => {
+    const d = new Date();
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    setPayDate(lastDay.toISOString().slice(0, 10));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200">
+      <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-2xl border border-emerald-100 w-full max-w-md text-left relative">
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
+        
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0 border border-emerald-100 shadow-sm">
+            <DollarSign size={24}/>
+          </div>
+          <div>
+            <h3 className="font-bold text-gray-800 text-lg">ระบุวันที่ทำจ่าย</h3>
+            <p className="text-xs text-gray-400">สถานะ: ส่งเอกสารเบิกจ่ายแล้ว</p>
+          </div>
+        </div>
+
+        {/* Task summary */}
+        <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-100 mb-4 space-y-1">
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-bold text-[#003366]">{task.taskNo}</span>
+            <span className="font-bold text-emerald-600">
+              {task.cost ? `฿ ${isNaN(task.cost) ? task.cost : Number(task.cost).toLocaleString()}` : 'ไม่ระบุยอดเงิน'}
+            </span>
+          </div>
+          <div className="text-[11px] text-gray-500 truncate">{task.project} • {task.company}</div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">
+              วันที่ทำจ่าย (วันที่จะได้รับเงิน) *
+            </label>
+            <input 
+              type="date" 
+              required 
+              value={payDate} 
+              onChange={e => setPayDate(e.target.value)} 
+              className="w-full p-3.5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-emerald-500 text-sm font-semibold text-gray-800" 
+            />
+            {/* Quick date presets */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              <button type="button" onClick={() => setPreset(0)} className="text-[10px] px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg font-medium">วันนี้</button>
+              <button type="button" onClick={() => setPreset(7)} className="text-[10px] px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg font-medium">+7 วัน</button>
+              <button type="button" onClick={() => setPreset(15)} className="text-[10px] px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg font-medium">+15 วัน</button>
+              <button type="button" onClick={setEndOfMonth} className="text-[10px] px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg font-medium">สิ้นเดือนนี้</button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">
+              หมายเหตุการทำจ่าย (ถ้ามี)
+            </label>
+            <input 
+              type="text" 
+              value={note} 
+              onChange={e => setNote(e.target.value)} 
+              placeholder="เช่น รอบโอนวันที่ 15, โอนผ่าน KTB" 
+              className="w-full p-3.5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-emerald-500 text-sm text-gray-700" 
+            />
+          </div>
+
+          <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100/60 text-[11px] text-emerald-800">
+            💡 เมื่อระบุวันที่ทำจ่าย รายการนี้จะถือว่าสมบูรณ์ และจะแสดงในรายงานประจำเดือนที่ทำจ่าย
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button 
+              type="button" 
+              onClick={onClose} 
+              disabled={loading}
+              className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-gray-100 text-gray-600 hover:bg-gray-200"
+            >
+              ยกเลิก
+            </button>
+            <button 
+              type="submit" 
+              disabled={loading || !payDate}
+              className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-emerald-600 text-white hover:bg-emerald-700 shadow-md shadow-emerald-600/20 active:scale-95 transition-transform"
+            >
+              {loading ? 'กำลังบันทึก...' : 'ยืนยันวันทำจ่าย'}
+            </button>
           </div>
         </form>
       </div>
@@ -1322,6 +1493,396 @@ function TimelineView({ timeline = [] }) {
 }
 
 // -------------------------------------------------------------
+// Component: หน้ารายละเอียดสไตล์ 80's สำหรับผู้ใช้งานทั่วไป / ร้านค้า
+// -------------------------------------------------------------
+function Retro80sTaskDetailView({ 
+  task, 
+  onClose, 
+  onUploadQuote, 
+  onRequestDownload, 
+  onOpenReschedule,
+  onRequestDisbursement,
+  onSwitchToClassic,
+  isUnlocked 
+}) {
+  const [activeSubTab, setActiveSubTab] = useState('info'); // 'info' | 'timeline'
+  const isOverdueTask = isScheduleOverdue(task);
+
+  const formatThaiDate = (dateStr) => {
+    if (!dateStr) return '-';
+    try {
+      return new Intl.DateTimeFormat('th-TH', { dateStyle: 'long' }).format(new Date(dateStr));
+    } catch {
+      return dateStr;
+    }
+  };
+
+  return (
+    <div 
+      className="p-6 md:p-8 rounded-t-[2.5rem] md:rounded-[2.5rem] border-2 border-[#FF007F]/50 shadow-[0_0_40px_rgba(255,0,127,0.3)] space-y-6 w-full max-w-3xl mx-auto text-left max-h-[90vh] overflow-y-auto custom-scrollbar relative font-sans text-white"
+      style={{
+        backgroundColor: '#120E24',
+        backgroundImage: 'radial-gradient(rgba(255, 0, 127, 0.15) 1px, transparent 1px), radial-gradient(rgba(0, 240, 255, 0.12) 1px, transparent 1px)',
+        backgroundSize: '24px 24px',
+        backgroundPosition: '0 0, 12px 12px'
+      }}
+    >
+      {/* 80's Rainbow Stripe Header Top Accent */}
+      <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-[#FF007F] via-[#FF6600] via-[#FFD700] via-[#00FF88] via-[#00F0FF] to-[#7928CA] rounded-t-[2.5rem]" />
+
+      {/* Top Bar with System Branding & Mode Switcher */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-pink-500/20 pb-4 pt-1">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-8 h-8 rounded-lg bg-pink-500/20 border border-pink-500/50 flex items-center justify-center text-[#FF007F] shadow-[0_0_10px_rgba(255,0,127,0.4)]">
+            <Radio size={16} className="animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="text-[10px] font-mono tracking-widest text-[#FF007F] font-bold uppercase drop-shadow-[0_0_8px_rgba(255,0,127,0.6)]">
+                📼 V-TRACK RETRO-80 // SYSTEM OS
+              </span>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-[#00FF88] border border-emerald-500/40 flex items-center gap-1 shadow-[0_0_8px_rgba(0,255,136,0.4)]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00FF88] animate-ping" /> ONLINE
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* View Switcher & Sub-tabs */}
+        <div className="flex items-center space-x-2 self-end sm:self-center">
+          <div className="flex bg-black/40 border border-pink-500/30 p-1 rounded-xl">
+            <button 
+              onClick={() => setActiveSubTab('info')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${activeSubTab === 'info' ? 'bg-[#FF007F] text-white shadow-[0_0_10px_rgba(255,0,127,0.6)]' : 'text-pink-300/60 hover:text-white'}`}
+            >
+              🕹️ ข้อมูลงาน
+            </button>
+            <button 
+              onClick={() => setActiveSubTab('timeline')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${activeSubTab === 'timeline' ? 'bg-[#00F0FF] text-black shadow-[0_0_10px_rgba(0,240,255,0.6)]' : 'text-cyan-300/60 hover:text-white'}`}
+            >
+              ⏱️ ไทม์ไลน์ ({task.timeline?.length || 0})
+            </button>
+          </div>
+
+          {onSwitchToClassic && (
+            <button 
+              onClick={onSwitchToClassic}
+              title="สลับไปมุมมองปกติ"
+              className="text-[10px] font-mono text-pink-300/80 hover:text-white px-2.5 py-1.5 rounded-xl border border-pink-500/30 hover:border-pink-400 bg-pink-500/10 flex items-center space-x-1 transition-all"
+            >
+              <span>🏢 Classic</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Task Identity Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-black text-2xl md:text-3xl text-[#00F0FF] font-mono tracking-wider drop-shadow-[0_0_12px_rgba(0,240,255,0.7)]">
+              {task.taskNo}
+            </h3>
+            <span className="px-3 py-1 rounded-full text-[10px] font-mono font-black uppercase tracking-wider border border-white/20 shadow-sm"
+              style={{
+                backgroundColor: 'rgba(255, 0, 127, 0.2)',
+                color: '#FF66B2',
+                borderColor: '#FF007F',
+                boxShadow: '0 0 10px rgba(255, 0, 127, 0.4)'
+              }}
+            >
+              {task.status}
+            </span>
+          </div>
+          <p className="text-xs font-mono text-pink-300/80 mt-1 uppercase tracking-wider">
+            PROJECT: <span className="text-white font-bold">{task.project}</span> • VENDOR: <span className="text-white font-bold">{task.company}</span>
+          </p>
+        </div>
+      </div>
+
+      {/* Overdue Alert in 80's synthwave styling */}
+      {isOverdueTask && (
+        <div className="p-4 bg-rose-950/80 border-2 border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.4)] rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-rose-200 animate-in fade-in">
+          <div className="flex items-center space-x-2.5">
+            <AlertTriangle className="text-rose-400 shrink-0 drop-shadow-[0_0_8px_rgba(244,63,94,0.8)]" size={22} />
+            <div className="text-xs font-mono">
+              <span className="font-black text-rose-300 block uppercase tracking-wider">⚠️ WARN // OVERDUE SCHEDULE</span>
+              <span className="text-rose-200/80">แผนงานระบุจบงานภายใน {task.endDate} แต่ยังไม่ได้ปรับสถานะเป็นจบงาน</span>
+            </div>
+          </div>
+          {onOpenReschedule && (
+            <button 
+              onClick={() => onOpenReschedule(task)}
+              className="px-4 py-2 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white rounded-xl text-xs font-mono font-bold shrink-0 flex items-center space-x-1.5 shadow-[0_0_12px_rgba(244,63,94,0.6)] uppercase tracking-wider active:scale-95 transition-all"
+            >
+              <CalendarDays size={14}/>
+              <span>ขอเลื่อนวันเริ่ม/วันจบ</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Tab 1: Info (80's Style) */}
+      {activeSubTab === 'info' && (
+        <div className="space-y-6">
+          {/* ⭐ HERO CARDS: HIGHLIGHTING PAYMENT DATE & APPOINTMENT DATE ⭐ */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* 1. HERO CARD: วันที่ทำจ่าย (วันที่จะได้รับเงิน) */}
+            <div className="relative p-5 rounded-2xl border-2 border-[#FFD700]/70 bg-gradient-to-br from-[#261E0A] via-[#1B1405] to-[#0F0B02] shadow-[0_0_25px_rgba(255,215,0,0.3)] text-left flex flex-col justify-between overflow-hidden group">
+              <div className="absolute -top-12 -right-12 w-28 h-28 bg-[#FFD700]/10 rounded-full blur-xl pointer-events-none group-hover:bg-[#FFD700]/20 transition-colors" />
+              
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2 text-[#FFD700] font-black text-xs uppercase tracking-wider drop-shadow-[0_0_6px_rgba(255,215,0,0.6)]">
+                    <DollarSign size={18} className="text-[#FFD700] drop-shadow-[0_0_8px_rgba(255,215,0,0.8)]" />
+                    <span>วันที่ทำจ่าย (วันที่จะได้รับเงิน)</span>
+                  </div>
+                  <span className="text-[9px] font-black font-mono uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#FFD700]/20 text-[#FFD700] border border-[#FFD700]/40 shadow-[0_0_8px_rgba(255,215,0,0.3)]">
+                    PAYMENT DATE
+                  </span>
+                </div>
+
+                {task.payDate ? (
+                  <div className="mt-2">
+                    <div className="text-2xl sm:text-3xl font-black text-[#00FF88] font-mono tracking-wider drop-shadow-[0_0_15px_rgba(0,255,136,0.8)]">
+                      {task.payDate}
+                    </div>
+                    <p className="text-xs text-emerald-300 font-semibold mt-1">
+                      {formatThaiDate(task.payDate)}
+                    </p>
+                    <div className="text-[11px] text-emerald-300/90 font-mono mt-1.5 flex items-center space-x-1.5">
+                      <CheckCircle2 size={13} className="text-[#00FF88] drop-shadow-[0_0_5px_rgba(0,255,136,0.8)]"/>
+                      <span>ยืนยันวันทำจ่ายแล้ว (ได้รับเงินตามกำหนดนี้)</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    <div className="text-lg sm:text-xl font-bold text-amber-300 font-mono tracking-wider">
+                      ⏳ อยู่ระหว่างรอบเบิกจ่าย
+                    </div>
+                    <div className="text-[11px] text-amber-200/70 font-mono mt-1">
+                      ยังไม่ได้ระบุวันทำจ่าย (รอฝ่ายการเงินแจ้งกำหนดการ)
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-[#FFD700]/20 flex justify-between items-center text-xs">
+                <span className="text-amber-200/70 uppercase font-mono tracking-widest text-[10px]">ยอดเงินค่าใช้จ่าย</span>
+                <span className="text-lg font-black text-[#FFD700] font-mono drop-shadow-[0_0_10px_rgba(255,215,0,0.6)]">
+                  ฿ {task.cost ? (isNaN(task.cost) ? task.cost : Number(task.cost).toLocaleString()) : '0'}
+                </span>
+              </div>
+            </div>
+
+            {/* 2. HERO CARD: วันที่นัดหมาย (กำหนดเข้าทำงาน) */}
+            <div className="relative p-5 rounded-2xl border-2 border-[#00F0FF]/70 bg-gradient-to-br from-[#062438] via-[#041926] to-[#020E17] shadow-[0_0_25px_rgba(0,240,255,0.3)] text-left flex flex-col justify-between overflow-hidden group">
+              <div className="absolute -top-12 -right-12 w-28 h-28 bg-[#00F0FF]/10 rounded-full blur-xl pointer-events-none group-hover:bg-[#00F0FF]/20 transition-colors" />
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2 text-[#00F0FF] font-black text-xs uppercase tracking-wider drop-shadow-[0_0_6px_rgba(0,240,255,0.6)]">
+                    <CalendarDays size={18} className="text-[#00F0FF] drop-shadow-[0_0_8px_rgba(0,240,255,0.8)]" />
+                    <span>วันที่นัดหมาย (กำหนดเข้าทำงาน)</span>
+                  </div>
+                  <span className="text-[9px] font-black font-mono uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40 shadow-[0_0_8px_rgba(0,240,255,0.3)]">
+                    APPOINTMENT
+                  </span>
+                </div>
+
+                {task.startDate && task.endDate ? (
+                  <div className="mt-2">
+                    <div className="text-xl sm:text-2xl font-black text-[#00F0FF] font-mono tracking-wider drop-shadow-[0_0_15px_rgba(0,240,255,0.8)]">
+                      {task.startDate} ถึง {task.endDate}
+                    </div>
+                    <p className="text-xs text-cyan-200 font-semibold mt-1">
+                      {formatThaiDate(task.startDate)} - {formatThaiDate(task.endDate)}
+                    </p>
+                    <div className="text-[11px] text-cyan-200/90 font-mono mt-1.5 flex items-center space-x-1.5">
+                      <Clock size={13} className="text-[#00F0FF]"/>
+                      <span>ปฏิบัติงานต่อเนื่อง {Math.max(1, Math.round((new Date(task.endDate) - new Date(task.startDate)) / (1000 * 60 * 60 * 24)) + 1)} วัน</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    <div className="text-2xl sm:text-3xl font-black text-[#00F0FF] font-mono tracking-wider drop-shadow-[0_0_15px_rgba(0,240,255,0.8)]">
+                      {task.aptDate || 'ยังไม่กำหนดวัน'}
+                    </div>
+                    {task.aptDate && (
+                      <p className="text-xs text-cyan-200 font-semibold mt-1">
+                        {formatThaiDate(task.aptDate)}
+                      </p>
+                    )}
+                    <div className="text-[11px] text-cyan-200/90 font-mono mt-1.5">
+                      {task.aptDate ? 'วันที่นัดหมายเข้าปฏิบัติงาน' : 'ยังไม่มีการระบุวันนัดหมายในระบบ'}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-[#00F0FF]/20 flex justify-between items-center text-xs">
+                <span className="text-cyan-200/70 uppercase font-mono tracking-widest text-[10px]">พื้นที่หน้างาน</span>
+                <span className="text-xs font-bold text-[#00F0FF] font-mono truncate pl-2">
+                  📍 {task.area || '-'}
+                </span>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Quick Action Button for Vendor / Contractor */}
+          <div className="p-4 bg-black/40 rounded-2xl border border-pink-500/30 flex flex-wrap items-center gap-3">
+            <label className="px-5 py-3 bg-gradient-to-r from-[#FF007F] via-[#FF1493] to-[#7928CA] hover:from-[#FF1A8C] hover:to-[#8E3DE8] text-white rounded-xl text-xs font-mono font-black cursor-pointer flex items-center space-x-2 shadow-[0_0_20px_rgba(255,0,127,0.5)] uppercase tracking-wider transition-all active:scale-95">
+              <Paperclip size={15}/>
+              <span>{task.quoteFileUrl ? '📎 แนบใบเสนอราคาใหม่ (PDF)' : '📎 แนบใบเสนอราคา (PDF)'}</span>
+              <input 
+                type="file" 
+                accept=".pdf,application/pdf" 
+                className="hidden" 
+                onChange={e => { if (e.target.files[0]) onUploadQuote(task, e.target.files[0]); }} 
+              />
+            </label>
+
+            {isUnlocked && onRequestDisbursement && (
+              <button 
+                onClick={() => onRequestDisbursement(task)}
+                className="px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all"
+              >
+                <DollarSign size={14}/>
+                <span>{task.status === 'ส่งเอกสารเบิกจ่ายแล้ว' ? 'แก้ไขวันทำจ่าย' : 'ส่งเอกสารเบิกจ่าย (ระบุวัน)'}</span>
+              </button>
+            )}
+
+            <div className="text-[11px] text-pink-200/70 font-mono ml-auto">
+              💡 ผู้รับเหมา/ร้านค้า สามารถแนบใบเสนอราคาได้โดยตรง
+            </div>
+          </div>
+
+          {/* Work Details in 80's CRT Terminal Box */}
+          <div className="bg-[#0A0713] border border-cyan-500/40 rounded-2xl p-4 text-left shadow-[inset_0_0_20px_rgba(0,240,255,0.08)]">
+            <div className="flex items-center justify-between border-b border-cyan-500/20 pb-2 mb-3 text-[10px] font-mono text-cyan-400">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"/>
+                TERMINAL // WORK_ORDER_DETAILS
+              </span>
+              <span>ASCII_TEXT // OK</span>
+            </div>
+            <p className="text-xs text-cyan-200/90 font-mono leading-relaxed whitespace-pre-wrap">
+              {task.details || 'ไม่มีรายละเอียดเพิ่มเติม'}
+            </p>
+          </div>
+
+          {/* Attached Documents in 80's Cyber Floppy / Cassette Cards */}
+          <div className="space-y-3 pt-2">
+            <h4 className="text-xs font-mono font-bold text-pink-300 uppercase tracking-widest flex items-center gap-1.5">
+              <Paperclip size={14}/> เอกสารแนบในระบบ (ดาวน์โหลดต้องใช้รหัสผ่าน Admin)
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* 1. ใบเสนอราคา */}
+              <div className="p-4 bg-black/40 rounded-2xl border border-amber-500/30 flex flex-col justify-between shadow-[0_0_15px_rgba(245,158,11,0.1)]">
+                <div>
+                  <span className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-widest block mb-1">1. ใบเสนอราคา</span>
+                  {task.quoteFileUrl ? (
+                    <div>
+                      <p className="text-xs font-mono font-bold text-amber-200 truncate" title={task.quoteFileName}>{task.quoteFileName || 'ใบเสนอราคา.pdf'}</p>
+                      <span className="text-[10px] text-emerald-400 font-mono font-medium">✓ แนบไฟล์แล้ว</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-500 font-mono italic">ยังไม่มีไฟล์แนบ</span>
+                  )}
+                </div>
+                {task.quoteFileUrl && (
+                  <button 
+                    onClick={() => onRequestDownload(task.quoteFileUrl, task.quoteFileName)}
+                    className="mt-3 w-full py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 rounded-xl text-xs font-mono font-bold text-amber-300 flex items-center justify-center space-x-1.5 transition-colors"
+                  >
+                    <Download size={13}/>
+                    <span>ดาวน์โหลด PDF</span>
+                  </button>
+                )}
+              </div>
+
+              {/* 2. ใบเสนอราคาที่เซ็นต์อนุมัติ */}
+              <div className="p-4 bg-black/40 rounded-2xl border border-indigo-500/30 flex flex-col justify-between shadow-[0_0_15px_rgba(99,102,241,0.1)]">
+                <div>
+                  <span className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-widest block mb-1">2. ลายเซ็นต์อนุมัติ</span>
+                  {task.signedFileUrl ? (
+                    <div>
+                      <p className="text-xs font-mono font-bold text-indigo-200 truncate" title={task.signedFileName}>{task.signedFileName || 'signed_quote.pdf'}</p>
+                      <span className="text-[10px] text-indigo-400 font-mono font-medium">✓ ประทับตราแล้ว</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-500 font-mono italic">ยังไม่ได้รับการเซ็นต์</span>
+                  )}
+                </div>
+                {task.signedFileUrl && (
+                  <button 
+                    onClick={() => onRequestDownload(task.signedFileUrl, task.signedFileName)}
+                    className="mt-3 w-full py-2 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/40 rounded-xl text-xs font-mono font-bold text-indigo-300 flex items-center justify-center space-x-1.5 transition-colors"
+                  >
+                    <Download size={13}/>
+                    <span>โหลดฉบับมีลายเซ็น</span>
+                  </button>
+                )}
+              </div>
+
+              {/* 3. ใบงานแจ้งซ่อม */}
+              <div className="p-4 bg-black/40 rounded-2xl border border-cyan-500/30 flex flex-col justify-between shadow-[0_0_15px_rgba(6,182,212,0.1)]">
+                <div>
+                  <span className="text-[10px] font-mono font-bold text-cyan-400 uppercase tracking-widest block mb-1">3. ใบงานแจ้งซ่อม</span>
+                  {task.taskFileUrl ? (
+                    <div>
+                      <p className="text-xs font-mono font-bold text-cyan-200 truncate" title={task.taskFileName}>{task.taskFileName || 'task_order.pdf'}</p>
+                      <span className="text-[10px] text-cyan-400 font-mono font-medium">✓ แนบใบงานแล้ว</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-500 font-mono italic">ยังไม่มีใบงาน</span>
+                  )}
+                </div>
+                {task.taskFileUrl && (
+                  <button 
+                    onClick={() => onRequestDownload(task.taskFileUrl, task.taskFileName)}
+                    className="mt-3 w-full py-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 rounded-xl text-xs font-mono font-bold text-cyan-300 flex items-center justify-center space-x-1.5 transition-colors"
+                  >
+                    <Download size={13}/>
+                    <span>ดาวน์โหลดใบงาน</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Activity Timeline (80's Style) */}
+      {activeSubTab === 'timeline' && (
+        <div className="pt-2">
+          <div className="p-4 bg-black/50 border border-pink-500/30 rounded-2xl">
+            <TimelineView timeline={task.timeline} />
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="flex justify-between items-center pt-4 border-t border-pink-500/20">
+        <span className="text-[10px] font-mono text-pink-300/60 uppercase">
+          V-TRACK OPERATION SYSTEM // RETRO TERMINAL
+        </span>
+        <button 
+          onClick={onClose} 
+          className="px-8 py-3 rounded-xl text-pink-200 font-mono font-bold bg-white/10 hover:bg-white/20 border border-pink-500/30 text-xs uppercase tracking-wider transition-all"
+        >
+          [ ปิดหน้าต่าง (CLOSE) ]
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
 // Component สำหรับเปิดดูรายละเอียด & ปฏิบัติการใบงาน (Task Operations)
 // -------------------------------------------------------------
 function TaskDetailView({ 
@@ -1332,10 +1893,28 @@ function TaskDetailView({
   onOpenTaskOrder,
   onOpenReschedule,
   onRequestCancel,
-  onRequestDownload
+  onRequestDownload,
+  onRequestDisbursement,
+  isUnlocked
 }) {
+  const [viewMode, setViewMode] = useState(!isUnlocked ? '80s' : 'classic');
   const [activeSubTab, setActiveSubTab] = useState('info'); // 'info' | 'timeline'
   const isOverdueTask = isScheduleOverdue(task);
+
+  if (viewMode === '80s') {
+    return (
+      <Retro80sTaskDetailView 
+        task={task} 
+        onClose={onClose} 
+        onUploadQuote={onUploadQuote} 
+        onRequestDownload={onRequestDownload} 
+        onOpenReschedule={onOpenReschedule}
+        onRequestDisbursement={onRequestDisbursement}
+        onSwitchToClassic={() => setViewMode('classic')}
+        isUnlocked={isUnlocked}
+      />
+    );
+  }
 
   return (
     <div className="bg-white p-6 md:p-10 rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-sm border border-gray-100 space-y-6 w-full max-w-3xl mx-auto text-left max-h-[90vh] overflow-y-auto custom-scrollbar">
@@ -1354,6 +1933,12 @@ function TaskDetailView({
           </div>
         </div>
         <div className="flex items-center space-x-2 self-end sm:self-center">
+          <button 
+            onClick={() => setViewMode('80s')}
+            className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-pink-50 text-[#FF007F] hover:bg-pink-100 border border-pink-200 transition-all flex items-center space-x-1"
+          >
+            <span>🕹️ มุมมอง 80's</span>
+          </button>
           <div className="flex bg-gray-100 p-1 rounded-xl">
             <button 
               onClick={() => setActiveSubTab('info')}
@@ -1439,7 +2024,18 @@ function TaskDetailView({
               </button>
             )}
 
-            {/* 5. ยกเลิกใบงาน */}
+            {/* 5. ส่งเอกสารเบิกจ่าย & ระบุวันทำจ่าย */}
+            {onRequestDisbursement && (
+              <button 
+                onClick={() => onRequestDisbursement(task)}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all active:scale-95"
+              >
+                <DollarSign size={14}/>
+                <span>{task.status === 'ส่งเอกสารเบิกจ่ายแล้ว' ? 'แก้ไขวันทำจ่าย' : 'ส่งเอกสารเบิกจ่าย (ระบุวัน)'}</span>
+              </button>
+            )}
+
+            {/* 6. ยกเลิกใบงาน */}
             {task.status !== 'ยกเลิก' && (
               <button 
                 onClick={() => onRequestCancel(task)}
@@ -1460,11 +2056,27 @@ function TaskDetailView({
             <DetailField label="โครงการ" value={task.project} />
             <DetailField label="บริษัท/ร้านค้า" value={task.company} />
             <DetailField label="พื้นที่" value={task.area} />
-            <DetailField 
-              label="กำหนดการทำงานตามแผน" 
-              value={task.startDate && task.endDate ? `${task.startDate} ถึง ${task.endDate}` : (task.aptDate || '-')} 
-            />
-            <DetailField label="วันทำจ่าย" value={task.payDate} />
+            
+            {/* Highlighted Appointment Date */}
+            <div className="p-3.5 bg-blue-50/80 rounded-2xl border border-blue-200 text-left">
+              <label className="block text-[10px] font-bold text-blue-700 uppercase tracking-widest ml-1 mb-1">
+                📅 กำหนดการทำงานตามแผน / วันนัดหมาย
+              </label>
+              <div className="text-sm font-black text-blue-900">
+                {task.startDate && task.endDate ? `${task.startDate} ถึง ${task.endDate}` : (task.aptDate || 'ยังไม่กำหนดวัน')}
+              </div>
+            </div>
+
+            {/* Highlighted Payment Date */}
+            <div className="p-3.5 bg-emerald-50/80 rounded-2xl border border-emerald-200 text-left">
+              <label className="block text-[10px] font-bold text-emerald-700 uppercase tracking-widest ml-1 mb-1">
+                💰 วันทำจ่าย (วันที่จะได้รับเงิน)
+              </label>
+              <div className="text-sm font-black text-emerald-800">
+                {task.payDate ? `✓ ${task.payDate}` : 'ยังไม่ระบุวันทำจ่าย (รอรอบเบิกจ่าย)'}
+              </div>
+            </div>
+
             <DetailField label="ค่าใช้จ่าย (บาท)" value={task.cost ? (isNaN(task.cost) ? task.cost : Number(task.cost).toLocaleString()) : '-'} />
             <div className="md:col-span-2">
               <DetailField label="รายละเอียดงาน" value={task.details} />
@@ -1950,6 +2562,10 @@ function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = 
   
   const sub = async (e) => { 
     e.preventDefault(); 
+    if (d.status === 'ส่งเอกสารเบิกจ่ายแล้ว' && !d.payDate) {
+      alert('กรุณาระบุวันทำจ่าย (วันที่จะได้รับเงิน) สำหรับสถานะส่งเอกสารเบิกจ่ายแล้ว');
+      return;
+    }
     await onSave(d, !!initialData, initialData?.id); 
     onSuccess(); 
   };
@@ -1989,12 +2605,45 @@ function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = 
         <Field label="โครงการ"><select required className="input-style" value={d.project} onChange={e=>setD({...d, project: e.target.value})}><option value="">เลือกโครงการ</option>{settings.projects.map(p=><option key={p} value={p}>{p}</option>)}</select></Field>
         <Field label="บริษัท/ร้านค้า"><select required className="input-style" value={d.company} onChange={e=>setD({...d, company: e.target.value})}><option value="">เลือกร้านค้า</option>{settings.companies.map(c=><option key={c} value={c}>{c}</option>)}</select></Field>
         
-        <div className="md:col-span-2"><Field label="สถานะการดำเนินงาน"><select className="input-style" value={d.status} onChange={e=>setD({...d, status: e.target.value})}>{STATUSES.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}</select></Field></div>
+        <div className="md:col-span-2">
+          <Field label="สถานะการดำเนินงาน">
+            <select 
+              className="input-style" 
+              value={d.status} 
+              onChange={e => {
+                const val = e.target.value;
+                const today = new Date().toISOString().slice(0, 10);
+                if (val === 'ส่งเอกสารเบิกจ่ายแล้ว' && !d.payDate) {
+                  setD({ ...d, status: val, payDate: today });
+                } else {
+                  setD({ ...d, status: val });
+                }
+              }}
+            >
+              {STATUSES.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+            </select>
+          </Field>
+        </div>
         
         <Field label="วันเริ่มงานตามแผน"><input type="date" className="input-style" value={d.startDate || d.aptDate || ''} onChange={e=>setD({...d, startDate: e.target.value, aptDate: e.target.value})}/></Field>
         <Field label="วันจบงานตามแผน"><input type="date" className="input-style" value={d.endDate || ''} onChange={e=>setD({...d, endDate: e.target.value})}/></Field>
         
-        <Field label="วันทำจ่าย"><input type="date" className="input-style" value={d.payDate} onChange={e=>setD({...d, payDate: e.target.value})}/></Field>
+        <div className={`space-y-1.5 text-left ${d.status === 'ส่งเอกสารเบิกจ่ายแล้ว' ? 'p-3 bg-emerald-50/80 rounded-2xl border-2 border-emerald-300 transition-all' : ''}`}>
+          <Field label="วันทำจ่าย (วันที่จะได้รับเงิน)">
+            <input 
+              type="date" 
+              required={d.status === 'ส่งเอกสารเบิกจ่ายแล้ว'}
+              className="input-style" 
+              value={d.payDate || ''} 
+              onChange={e=>setD({...d, payDate: e.target.value})}
+            />
+          </Field>
+          {d.status === 'ส่งเอกสารเบิกจ่ายแล้ว' && (
+            <span className="text-[10px] text-emerald-700 font-bold block pl-1">
+              💰 สถานะส่งเอกสารเบิกจ่าย: กรุณาระบุวันที่คาดว่าจะได้รับเงิน
+            </span>
+          )}
+        </div>
         <Field label="ค่าใช้จ่าย (บาท)"><input type="text" className="input-style" value={d.cost || ''} onChange={handleCostChange} placeholder="ระบุค่าใช้จ่าย (ถ้ามี)"/></Field>
         
         <div className="md:col-span-2"><Field label="รายละเอียด"><textarea rows="3" className="input-style resize-none" value={d.details} onChange={e=>setD({...d, details: e.target.value})}></textarea></Field></div>
@@ -2015,7 +2664,7 @@ function Field({ label, children }) {
 
 // -----------------------------------------------------------------
 
-function Management({ tasks, settings, onSave, onDelete, onViewDetail, onRequestCancel }) {
+function Management({ tasks, settings, onSave, onDelete, onViewDetail, onRequestCancel, onRequestDisbursement }) {
   const [edit, setEdit] = useState(null);
   const [search, setSearch] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
@@ -2113,7 +2762,7 @@ function Management({ tasks, settings, onSave, onDelete, onViewDetail, onRequest
                     <td className="px-6 py-5 text-gray-500 text-xs truncate pr-2" title={t.details}>{t.details || '-'}</td>
                     <td className="px-6 py-5 text-right font-semibold text-[#003366] whitespace-nowrap">{t.cost ? (isNaN(t.cost) ? t.cost : Number(t.cost).toLocaleString()) : '-'}</td>
                     <td className="px-6 py-5 text-center">
-                      <InlineStatusSelect task={t} onSave={onSave} onRequestCancel={onRequestCancel} />
+                      <InlineStatusSelect task={t} onSave={onSave} onRequestCancel={onRequestCancel} onRequestDisbursement={onRequestDisbursement} />
                     </td>
                     <td className="px-6 py-5 text-center space-x-1.5">
                       <button onClick={()=>onViewDetail(t)} title="ดูรายละเอียด & เอกสาร" className="p-2 text-gray-400 hover:text-[#003366] transition-colors"><Eye size={18}/></button>
@@ -2148,7 +2797,7 @@ function Management({ tasks, settings, onSave, onDelete, onViewDetail, onRequest
                       <div className="text-[10px] text-gray-400 mt-0.5 font-mono">{t.startDate} - {t.endDate}</div>
                     )}
                   </div>
-                  <div className="shrink-0 mt-1"><InlineStatusSelect task={t} onSave={onSave} onRequestCancel={onRequestCancel} /></div>
+                  <div className="shrink-0 mt-1"><InlineStatusSelect task={t} onSave={onSave} onRequestCancel={onRequestCancel} onRequestDisbursement={onRequestDisbursement} /></div>
                 </div>
 
                 {/* Badges for attachments on mobile */}

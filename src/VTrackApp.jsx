@@ -407,7 +407,7 @@ function InlineStatusSelect({ task, onSave, onRequestCancel, onRequestDisburseme
       <select 
         value={task.status} 
         onChange={handleChange}
-        className="w-full appearance-none px-3 py-1.5 rounded-full text-[10px] font-bold border border-white shadow-sm cursor-pointer outline-none focus:ring-2 focus:ring-[#C5A059]"
+        className="w-full appearance-none px-3 py-1.5 rounded-[5px] text-[10px] font-bold border-t border-t-white/40 border-b-2 border-b-black/20 shadow-2xs cursor-pointer outline-none focus:ring-2 focus:ring-[#C5A059]"
         style={{backgroundColor: s?.bgColor || '#f3f4f6', color: s?.color || '#374151'}}
       >
         {STATUSES.map(st => (
@@ -1962,30 +1962,35 @@ function Retro80sTaskDetailView({
 
   return (
     <div 
-      className="p-6 md:p-8 rounded-t-[2.5rem] md:rounded-[2.5rem] border-2 border-[#FF007F]/50 shadow-[0_0_40px_rgba(255,0,127,0.3)] space-y-6 w-full max-w-3xl mx-auto text-left max-h-[90vh] overflow-y-auto custom-scrollbar relative font-sans text-white"
+      className="p-6 md:p-8 rounded-t-[2.5rem] md:rounded-[2.5rem] border-2 border-stone-300 shadow-[0_25px_60px_rgba(0,0,0,0.18)] space-y-6 w-full max-w-3xl mx-auto text-left max-h-[90vh] overflow-y-auto custom-scrollbar relative font-sans text-stone-900 bg-[#FAF8F5]"
       style={{
-        backgroundColor: '#120E24',
-        backgroundImage: 'radial-gradient(rgba(255, 0, 127, 0.15) 1px, transparent 1px), radial-gradient(rgba(0, 240, 255, 0.12) 1px, transparent 1px)',
-        backgroundSize: '24px 24px',
-        backgroundPosition: '0 0, 12px 12px'
+        backgroundImage: 'radial-gradient(rgba(120, 113, 108, 0.15) 1px, transparent 1px)',
+        backgroundSize: '20px 20px',
+        backgroundPosition: '0 0'
       }}
     >
-      {/* 80's Rainbow Stripe Header Top Accent */}
-      <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-[#FF007F] via-[#FF6600] via-[#FFD700] via-[#00FF88] via-[#00F0FF] to-[#7928CA] rounded-t-[2.5rem]" />
+      {/* 80's Classic Retro Color Stripe Accent */}
+      <div className="absolute top-0 left-0 right-0 h-2.5 flex rounded-t-[2.5rem] overflow-hidden">
+        <div className="flex-1 bg-[#DC2626]" />
+        <div className="flex-1 bg-[#EA580C]" />
+        <div className="flex-1 bg-[#F59E0B]" />
+        <div className="flex-1 bg-[#059669]" />
+        <div className="flex-1 bg-[#2563EB]" />
+      </div>
 
-      {/* Top Bar with System Branding & Mode Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-pink-500/20 pb-4 pt-1">
+      {/* Top Bar with 80's Vintage System Branding & Mode Switcher */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-stone-200 pb-4 pt-1">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-lg bg-pink-500/20 border border-pink-500/50 flex items-center justify-center text-[#FF007F] shadow-[0_0_10px_rgba(255,0,127,0.4)]">
-            <Radio size={16} className="animate-pulse" />
+          <div className="w-8 h-8 rounded-lg bg-stone-200 border-t border-white border-b-2 border-stone-400 flex items-center justify-center text-stone-700 shadow-xs">
+            <Radio size={16} />
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <span className="text-[10px] font-mono tracking-widest text-[#FF007F] font-bold uppercase drop-shadow-[0_0_8px_rgba(255,0,127,0.6)]">
-                📼 V-TRACK RETRO-80 // SYSTEM OS
+              <span className="text-[11px] font-mono tracking-wider text-stone-700 font-bold uppercase">
+                📻 V-TRACK CLASSIC 80 // WORK ORDER
               </span>
-              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-[#00FF88] border border-emerald-500/40 flex items-center gap-1 shadow-[0_0_8px_rgba(0,255,136,0.4)]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#00FF88] animate-ping" /> ONLINE
+              <span className="text-[9px] font-mono px-2 py-0.5 rounded-[3px] bg-emerald-100 text-emerald-800 border-t border-emerald-200 border-b border-emerald-400 font-bold flex items-center gap-1 shadow-2xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" /> READY
               </span>
             </div>
           </div>
@@ -1993,16 +1998,16 @@ function Retro80sTaskDetailView({
 
         {/* View Switcher & Sub-tabs */}
         <div className="flex items-center space-x-2 self-end sm:self-center">
-          <div className="flex bg-black/40 border border-pink-500/30 p-1 rounded-xl">
+          <div className="flex bg-stone-200/90 border border-stone-300 p-1 rounded-xl shadow-inner">
             <button 
               onClick={() => setActiveSubTab('info')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${activeSubTab === 'info' ? 'bg-[#FF007F] text-white shadow-[0_0_10px_rgba(255,0,127,0.6)]' : 'text-pink-300/60 hover:text-white'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${activeSubTab === 'info' ? 'bg-white text-stone-900 shadow-xs border-t border-white border-b border-stone-300' : 'text-stone-600 hover:text-stone-900'}`}
             >
               🕹️ ข้อมูลงาน
             </button>
             <button 
               onClick={() => setActiveSubTab('timeline')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${activeSubTab === 'timeline' ? 'bg-[#00F0FF] text-black shadow-[0_0_10px_rgba(0,240,255,0.6)]' : 'text-cyan-300/60 hover:text-white'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${activeSubTab === 'timeline' ? 'bg-white text-stone-900 shadow-xs border-t border-white border-b border-stone-300' : 'text-stone-600 hover:text-stone-900'}`}
             >
               ⏱️ ไทม์ไลน์ ({task.timeline?.length || 0})
             </button>
@@ -2011,10 +2016,10 @@ function Retro80sTaskDetailView({
           {onSwitchToClassic && (
             <button 
               onClick={onSwitchToClassic}
-              title="สลับไปมุมมองปกติ"
-              className="text-[10px] font-mono text-pink-300/80 hover:text-white px-2.5 py-1.5 rounded-xl border border-pink-500/30 hover:border-pink-400 bg-pink-500/10 flex items-center space-x-1 transition-all"
+              title="สลับไปมุมมองมาตรฐาน"
+              className="text-[11px] font-mono text-stone-600 hover:text-stone-900 px-3 py-1.5 rounded-xl border border-stone-300 hover:border-stone-400 bg-white shadow-2xs flex items-center space-x-1 transition-all"
             >
-              <span>🏢 Classic</span>
+              <span>🏢 Classic View</span>
             </button>
           )}
         </div>
@@ -2023,41 +2028,32 @@ function Retro80sTaskDetailView({
       {/* Task Identity Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-black text-2xl md:text-3xl text-[#00F0FF] font-mono tracking-wider drop-shadow-[0_0_12px_rgba(0,240,255,0.7)]">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h3 className="font-black text-2xl md:text-3xl text-stone-900 font-mono tracking-tight">
               {task.taskNo}
             </h3>
-            <span className="px-3 py-1 rounded-full text-[10px] font-mono font-black uppercase tracking-wider border border-white/20 shadow-sm"
-              style={{
-                backgroundColor: 'rgba(255, 0, 127, 0.2)',
-                color: '#FF66B2',
-                borderColor: '#FF007F',
-                boxShadow: '0 0 10px rgba(255, 0, 127, 0.4)'
-              }}
-            >
-              {task.status}
-            </span>
+            <StatusTag label={task.status} />
           </div>
-          <p className="text-xs font-mono text-pink-300/80 mt-1 uppercase tracking-wider">
-            PROJECT: <span className="text-white font-bold">{task.project}</span> • VENDOR: <span className="text-white font-bold">{task.company}</span>
+          <p className="text-xs font-mono text-stone-600 mt-1 uppercase tracking-wider">
+            PROJECT: <span className="text-stone-900 font-bold">{task.project}</span> • VENDOR: <span className="text-stone-900 font-bold">{task.company}</span>
           </p>
         </div>
       </div>
 
-      {/* Overdue Alert in 80's synthwave styling */}
+      {/* Overdue Alert in 80's Vintage Warning Styling */}
       {isOverdueTask && (
-        <div className="p-4 bg-rose-950/80 border-2 border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.4)] rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-rose-200 animate-in fade-in">
+        <div className="p-4 bg-red-50 border-2 border-red-400 shadow-xs rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-red-900 animate-in fade-in">
           <div className="flex items-center space-x-2.5">
-            <AlertTriangle className="text-rose-400 shrink-0 drop-shadow-[0_0_8px_rgba(244,63,94,0.8)]" size={22} />
+            <AlertTriangle className="text-red-600 shrink-0" size={22} />
             <div className="text-xs font-mono">
-              <span className="font-black text-rose-300 block uppercase tracking-wider">⚠️ WARN // OVERDUE SCHEDULE</span>
-              <span className="text-rose-200/80">แผนงานระบุจบงานภายใน {task.endDate} แต่ยังไม่ได้ปรับสถานะเป็นจบงาน</span>
+              <span className="font-black text-red-700 block uppercase tracking-wider">⚠️ แจ้งเตือนงานเลยกำหนด (OVERDUE)</span>
+              <span className="text-red-800">แผนงานระบุจบงานภายใน {task.endDate} แต่ยังไม่ได้ปรับสถานะเป็นจบงาน</span>
             </div>
           </div>
           {onOpenReschedule && (
             <button 
               onClick={() => onOpenReschedule(task)}
-              className="px-4 py-2 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white rounded-xl text-xs font-mono font-bold shrink-0 flex items-center space-x-1.5 shadow-[0_0_12px_rgba(244,63,94,0.6)] uppercase tracking-wider active:scale-95 transition-all"
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-mono font-bold shrink-0 flex items-center space-x-1.5 shadow-xs uppercase tracking-wider active:scale-95 transition-all border-t border-red-400 border-b-2 border-red-800"
             >
               <CalendarDays size={14}/>
               <span>ขอเลื่อนวันเริ่ม/วันจบ</span>
@@ -2066,108 +2062,104 @@ function Retro80sTaskDetailView({
         </div>
       )}
 
-      {/* Tab 1: Info (80's Style) */}
+      {/* Tab 1: Info (80's Classic Style) */}
       {activeSubTab === 'info' && (
         <div className="space-y-6">
           {/* ⭐ HERO CARDS: HIGHLIGHTING PAYMENT DATE & APPOINTMENT DATE ⭐ */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
             {/* 1. HERO CARD: วันที่ทำจ่าย (วันที่จะได้รับเงิน) */}
-            <div className="relative p-5 rounded-2xl border-2 border-[#FFD700]/70 bg-gradient-to-br from-[#261E0A] via-[#1B1405] to-[#0F0B02] shadow-[0_0_25px_rgba(255,215,0,0.3)] text-left flex flex-col justify-between overflow-hidden group">
-              <div className="absolute -top-12 -right-12 w-28 h-28 bg-[#FFD700]/10 rounded-full blur-xl pointer-events-none group-hover:bg-[#FFD700]/20 transition-colors" />
-              
+            <div className="relative p-5 rounded-2xl border-2 border-amber-300 bg-[#FFFDF7] shadow-xs text-left flex flex-col justify-between overflow-hidden">
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-2 text-[#FFD700] font-black text-xs uppercase tracking-wider drop-shadow-[0_0_6px_rgba(255,215,0,0.6)]">
-                    <DollarSign size={18} className="text-[#FFD700] drop-shadow-[0_0_8px_rgba(255,215,0,0.8)]" />
+                  <div className="flex items-center space-x-2 text-amber-900 font-bold text-xs uppercase tracking-wider">
+                    <DollarSign size={18} className="text-amber-700" />
                     <span>วันที่ทำจ่าย (วันที่จะได้รับเงิน)</span>
                   </div>
-                  <span className="text-[9px] font-black font-mono uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#FFD700]/20 text-[#FFD700] border border-[#FFD700]/40 shadow-[0_0_8px_rgba(255,215,0,0.3)]">
+                  <span className="text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-[3px] bg-amber-800 text-white shadow-2xs border-t border-amber-600 border-b border-amber-950">
                     PAYMENT DATE
                   </span>
                 </div>
 
                 {task.payDate ? (
                   <div className="mt-2">
-                    <div className="text-2xl sm:text-3xl font-black text-[#00FF88] font-mono tracking-wider drop-shadow-[0_0_15px_rgba(0,255,136,0.8)]">
+                    <div className="text-2xl sm:text-3xl font-black text-emerald-800 font-mono tracking-tight">
                       {task.payDate}
                     </div>
-                    <p className="text-xs text-emerald-300 font-semibold mt-1">
+                    <p className="text-xs text-emerald-700 font-semibold mt-1">
                       {formatThaiDate(task.payDate)}
                     </p>
-                    <div className="text-[11px] text-emerald-300/90 font-mono mt-1.5 flex items-center space-x-1.5">
-                      <CheckCircle2 size={13} className="text-[#00FF88] drop-shadow-[0_0_5px_rgba(0,255,136,0.8)]"/>
+                    <div className="text-[11px] text-emerald-800 font-mono mt-1.5 flex items-center space-x-1.5">
+                      <CheckCircle2 size={13} className="text-emerald-600"/>
                       <span>ยืนยันวันทำจ่ายแล้ว (ได้รับเงินตามกำหนดนี้)</span>
                     </div>
                   </div>
                 ) : (
                   <div className="mt-2">
-                    <div className="text-lg sm:text-xl font-bold text-amber-300 font-mono tracking-wider">
+                    <div className="text-lg sm:text-xl font-bold text-stone-700 font-mono tracking-wider">
                       ⏳ อยู่ระหว่างรอบเบิกจ่าย
                     </div>
-                    <div className="text-[11px] text-amber-200/70 font-mono mt-1">
+                    <div className="text-[11px] text-stone-500 font-mono mt-1">
                       ยังไม่ได้ระบุวันทำจ่าย (รอฝ่ายการเงินแจ้งกำหนดการ)
                     </div>
                   </div>
                 )}
               </div>
 
-              <div className="mt-4 pt-3 border-t border-[#FFD700]/20 flex justify-between items-center text-xs">
-                <span className="text-amber-200/70 uppercase font-mono tracking-widest text-[10px]">ยอดเงินค่าใช้จ่าย</span>
-                <span className="text-lg font-black text-[#FFD700] font-mono drop-shadow-[0_0_10px_rgba(255,215,0,0.6)]">
+              <div className="mt-4 pt-3 border-t border-amber-200/80 flex justify-between items-center text-xs">
+                <span className="text-stone-500 uppercase font-mono tracking-widest text-[10px]">ยอดเงินค่าใช้จ่าย</span>
+                <span className="text-lg font-black text-amber-900 font-mono">
                   ฿ {task.cost ? (isNaN(task.cost) ? task.cost : Number(task.cost).toLocaleString()) : '0'}
                 </span>
               </div>
             </div>
 
             {/* 2. HERO CARD: วันที่นัดหมาย (กำหนดเข้าทำงาน) */}
-            <div className="relative p-5 rounded-2xl border-2 border-[#00F0FF]/70 bg-gradient-to-br from-[#062438] via-[#041926] to-[#020E17] shadow-[0_0_25px_rgba(0,240,255,0.3)] text-left flex flex-col justify-between overflow-hidden group">
-              <div className="absolute -top-12 -right-12 w-28 h-28 bg-[#00F0FF]/10 rounded-full blur-xl pointer-events-none group-hover:bg-[#00F0FF]/20 transition-colors" />
-
+            <div className="relative p-5 rounded-2xl border-2 border-sky-300 bg-[#F8FAFC] shadow-xs text-left flex flex-col justify-between overflow-hidden">
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-2 text-[#00F0FF] font-black text-xs uppercase tracking-wider drop-shadow-[0_0_6px_rgba(0,240,255,0.6)]">
-                    <CalendarDays size={18} className="text-[#00F0FF] drop-shadow-[0_0_8px_rgba(0,240,255,0.8)]" />
+                  <div className="flex items-center space-x-2 text-sky-900 font-bold text-xs uppercase tracking-wider">
+                    <CalendarDays size={18} className="text-sky-700" />
                     <span>วันที่นัดหมาย (กำหนดเข้าทำงาน)</span>
                   </div>
-                  <span className="text-[9px] font-black font-mono uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40 shadow-[0_0_8px_rgba(0,240,255,0.3)]">
+                  <span className="text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-[3px] bg-sky-800 text-white shadow-2xs border-t border-sky-600 border-b border-sky-950">
                     APPOINTMENT
                   </span>
                 </div>
 
                 {task.startDate && task.endDate ? (
                   <div className="mt-2">
-                    <div className="text-xl sm:text-2xl font-black text-[#00F0FF] font-mono tracking-wider drop-shadow-[0_0_15px_rgba(0,240,255,0.8)]">
+                    <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono tracking-tight">
                       {task.startDate} ถึง {task.endDate}
                     </div>
-                    <p className="text-xs text-cyan-200 font-semibold mt-1">
+                    <p className="text-xs text-slate-600 font-semibold mt-1">
                       {formatThaiDate(task.startDate)} - {formatThaiDate(task.endDate)}
                     </p>
-                    <div className="text-[11px] text-cyan-200/90 font-mono mt-1.5 flex items-center space-x-1.5">
-                      <Clock size={13} className="text-[#00F0FF]"/>
+                    <div className="text-[11px] text-slate-700 font-mono mt-1.5 flex items-center space-x-1.5">
+                      <Clock size={13} className="text-sky-700"/>
                       <span>ปฏิบัติงานต่อเนื่อง {Math.max(1, Math.round((new Date(task.endDate) - new Date(task.startDate)) / (1000 * 60 * 60 * 24)) + 1)} วัน</span>
                     </div>
                   </div>
                 ) : (
                   <div className="mt-2">
-                    <div className="text-2xl sm:text-3xl font-black text-[#00F0FF] font-mono tracking-wider drop-shadow-[0_0_15px_rgba(0,240,255,0.8)]">
+                    <div className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight">
                       {task.aptDate || 'ยังไม่กำหนดวัน'}
                     </div>
                     {task.aptDate && (
-                      <p className="text-xs text-cyan-200 font-semibold mt-1">
+                      <p className="text-xs text-slate-600 font-semibold mt-1">
                         {formatThaiDate(task.aptDate)}
                       </p>
                     )}
-                    <div className="text-[11px] text-cyan-200/90 font-mono mt-1.5">
+                    <div className="text-[11px] text-slate-500 font-mono mt-1.5">
                       {task.aptDate ? 'วันที่นัดหมายเข้าปฏิบัติงาน' : 'ยังไม่มีการระบุวันนัดหมายในระบบ'}
                     </div>
                   </div>
                 )}
               </div>
 
-              <div className="mt-4 pt-3 border-t border-[#00F0FF]/20 flex justify-between items-center text-xs">
-                <span className="text-cyan-200/70 uppercase font-mono tracking-widest text-[10px]">พื้นที่หน้างาน</span>
-                <span className="text-xs font-bold text-[#00F0FF] font-mono truncate pl-2">
+              <div className="mt-4 pt-3 border-t border-sky-200/80 flex justify-between items-center text-xs">
+                <span className="text-stone-500 uppercase font-mono tracking-widest text-[10px]">พื้นที่หน้างาน</span>
+                <span className="text-xs font-bold text-sky-900 font-mono truncate pl-2">
                   📍 {task.area || '-'}
                 </span>
               </div>
@@ -2176,8 +2168,8 @@ function Retro80sTaskDetailView({
           </div>
 
           {/* Quick Action Button for Vendor / Contractor */}
-          <div className="p-4 bg-black/40 rounded-2xl border border-pink-500/30 flex flex-wrap items-center gap-3">
-            <label className={`px-5 py-3 bg-gradient-to-r from-[#FF007F] via-[#FF1493] to-[#7928CA] hover:from-[#FF1A8C] hover:to-[#8E3DE8] text-white rounded-xl text-xs font-mono font-black cursor-pointer flex items-center space-x-2 shadow-[0_0_20px_rgba(255,0,127,0.5)] uppercase tracking-wider transition-all active:scale-95 ${isUploadingQuote ? 'opacity-70 pointer-events-none' : ''}`}>
+          <div className="p-4 bg-white rounded-2xl border-2 border-stone-200 shadow-2xs flex flex-wrap items-center gap-3">
+            <label className={`px-5 py-3 bg-[#1D4ED8] hover:bg-[#1E40AF] text-white rounded-xl text-xs font-mono font-bold cursor-pointer flex items-center space-x-2 shadow-xs uppercase tracking-wider transition-all active:scale-95 border-t border-blue-400 border-b-2 border-blue-900 ${isUploadingQuote ? 'opacity-70 pointer-events-none' : ''}`}>
               {isUploadingQuote ? <Loader2 size={15} className="animate-spin" /> : <Paperclip size={15}/>}
               <span>{isUploadingQuote ? 'กำลังอัปโหลด...' : ((task.quoteFileUrl || task.quoteFileId) ? '📎 แนบใบเสนอราคาใหม่ (PDF)' : '📎 แนบใบเสนอราคา (PDF)')}</span>
               <input 
@@ -2203,64 +2195,64 @@ function Retro80sTaskDetailView({
             {isUnlocked && onRequestDisbursement && (
               <button 
                 onClick={() => onRequestDisbursement(task)}
-                className="px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all"
+                className="px-4 py-3 bg-[#047857] hover:bg-[#065F46] text-white rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 shadow-xs transition-all border-t border-emerald-400 border-b-2 border-emerald-900"
               >
                 <DollarSign size={14}/>
                 <span>{task.status === 'ส่งเอกสารเบิกจ่ายแล้ว' ? 'แก้ไขวันทำจ่าย' : 'ส่งเอกสารเบิกจ่าย (ระบุวัน)'}</span>
               </button>
             )}
 
-            <div className="text-[11px] text-pink-200/70 font-mono ml-auto">
+            <div className="text-[11px] text-stone-500 font-mono ml-auto">
               💡 ผู้รับเหมา/ร้านค้า สามารถแนบใบเสนอราคาได้โดยตรง
             </div>
           </div>
 
-          {/* Work Details in 80's CRT Terminal Box */}
-          <div className="bg-[#0A0713] border border-cyan-500/40 rounded-2xl p-4 text-left shadow-[inset_0_0_20px_rgba(0,240,255,0.08)]">
-            <div className="flex items-center justify-between border-b border-cyan-500/20 pb-2 mb-3 text-[10px] font-mono text-cyan-400">
+          {/* Work Details in 80's Typewriter Memo Box */}
+          <div className="bg-white border-2 border-stone-200 rounded-2xl p-4 text-left shadow-2xs">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-2 mb-3 text-[10px] font-mono text-stone-600">
               <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"/>
-                TERMINAL // WORK_ORDER_DETAILS
+                <span className="w-2 h-2 rounded-full bg-stone-500" />
+                MEMORANDUM // WORK_ORDER_DETAILS
               </span>
-              <span>ASCII_TEXT // OK</span>
+              <span>TYPEWRITER // TEXT</span>
             </div>
-            <p className="text-xs text-cyan-200/90 font-mono leading-relaxed whitespace-pre-wrap">
+            <p className="text-xs text-stone-800 font-mono leading-relaxed whitespace-pre-wrap">
               {task.details || 'ไม่มีรายละเอียดเพิ่มเติม'}
             </p>
           </div>
 
-          {/* Attached Documents in 80's Cyber Floppy / Cassette Cards */}
+          {/* Attached Documents in 80's Index Cards */}
           <div className="space-y-3 pt-2">
-            <h4 className="text-xs font-mono font-bold text-pink-300 uppercase tracking-widest flex items-center gap-1.5">
+            <h4 className="text-xs font-mono font-bold text-stone-700 uppercase tracking-wider flex items-center gap-1.5">
               <Paperclip size={14}/> เอกสารแนบในระบบ (เปิดดูและดาวน์โหลดได้)
             </h4>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {/* 1. ใบเสนอราคา */}
-              <div className="p-4 bg-black/40 rounded-2xl border border-amber-500/30 flex flex-col justify-between shadow-[0_0_15px_rgba(245,158,11,0.1)]">
+              <div className="p-4 bg-white rounded-2xl border-2 border-amber-200 flex flex-col justify-between shadow-2xs">
                 <div>
-                  <span className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-widest block mb-1">1. ใบเสนอราคา</span>
+                  <span className="text-[10px] font-mono font-bold text-amber-800 uppercase tracking-widest block mb-1">1. ใบเสนอราคา</span>
                   {(task.quoteFileUrl || task.quoteFileId) ? (
                     <div>
-                      <p className="text-xs font-mono font-bold text-amber-200 truncate" title={task.quoteFileName}>{task.quoteFileName || 'ใบเสนอราคา.pdf'}</p>
-                      <span className="text-[10px] text-emerald-400 font-mono font-medium">✓ แนบไฟล์แล้ว</span>
+                      <p className="text-xs font-mono font-bold text-stone-800 truncate" title={task.quoteFileName}>{task.quoteFileName || 'ใบเสนอราคา.pdf'}</p>
+                      <span className="text-[10px] text-emerald-700 font-mono font-bold">✓ แนบไฟล์แล้ว</span>
                     </div>
                   ) : (
-                    <span className="text-xs text-gray-500 font-mono italic">ยังไม่มีไฟล์แนบ</span>
+                    <span className="text-xs text-stone-400 font-mono italic">ยังไม่มีไฟล์แนบ</span>
                   )}
                 </div>
                 {(task.quoteFileUrl || task.quoteFileId) && (
                   <div className="mt-3 flex items-center gap-1.5">
                     <button 
                       onClick={() => onPreviewPdf && onPreviewPdf(task.quoteFileUrl || task.quoteFileId, `ใบเสนอราคา: ${task.quoteFileName || 'quotation.pdf'}`, task.quoteFileName)}
-                      className="flex-1 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-xl text-xs font-mono font-bold text-amber-300 flex items-center justify-center space-x-1.5 transition-colors shadow-[0_0_10px_rgba(245,158,11,0.2)] active:scale-95"
+                      className="flex-1 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl text-xs font-mono font-bold text-amber-900 flex items-center justify-center space-x-1.5 transition-colors shadow-2xs active:scale-95"
                     >
                       <Eye size={13}/>
                       <span>เปิดดูเอกสาร</span>
                     </button>
                     <button 
                       onClick={() => onRequestDownload(task.quoteFileUrl || task.quoteFileId, task.quoteFileName)}
-                      className="p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl text-amber-300 transition-colors"
+                      className="p-2 bg-stone-100 hover:bg-stone-200 border border-stone-300 rounded-xl text-stone-700 transition-colors shadow-2xs"
                       title="ดาวน์โหลดเก็บไว้ในเครื่อง"
                     >
                       <Download size={13}/>
@@ -2270,30 +2262,30 @@ function Retro80sTaskDetailView({
               </div>
 
               {/* 2. ใบเสนอราคาที่เซ็นต์อนุมัติ */}
-              <div className="p-4 bg-black/40 rounded-2xl border border-indigo-500/30 flex flex-col justify-between shadow-[0_0_15px_rgba(99,102,241,0.1)]">
+              <div className="p-4 bg-white rounded-2xl border-2 border-indigo-200 flex flex-col justify-between shadow-2xs">
                 <div>
-                  <span className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-widest block mb-1">2. ลายเซ็นต์อนุมัติ</span>
+                  <span className="text-[10px] font-mono font-bold text-indigo-800 uppercase tracking-widest block mb-1">2. ลายเซ็นต์อนุมัติ</span>
                   {(task.signedFileUrl || task.signedFileId) ? (
                     <div>
-                      <p className="text-xs font-mono font-bold text-indigo-200 truncate" title={task.signedFileName}>{task.signedFileName || 'signed_quote.pdf'}</p>
-                      <span className="text-[10px] text-indigo-400 font-mono font-medium">✓ ประทับตราแล้ว</span>
+                      <p className="text-xs font-mono font-bold text-stone-800 truncate" title={task.signedFileName}>{task.signedFileName || 'signed_quote.pdf'}</p>
+                      <span className="text-[10px] text-indigo-700 font-mono font-bold">✓ ประทับตราแล้ว</span>
                     </div>
                   ) : (
-                    <span className="text-xs text-gray-500 font-mono italic">ยังไม่ได้รับการเซ็นต์</span>
+                    <span className="text-xs text-stone-400 font-mono italic">ยังไม่ได้รับการเซ็นต์</span>
                   )}
                 </div>
                 {(task.signedFileUrl || task.signedFileId) && (
                   <div className="mt-3 flex items-center gap-1.5">
                     <button 
                       onClick={() => onPreviewPdf && onPreviewPdf(task.signedFileUrl || task.signedFileId, `ฉบับเซ็นต์อนุมัติ: ${task.signedFileName || 'signed_quote.pdf'}`, task.signedFileName)}
-                      className="flex-1 py-2 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/50 rounded-xl text-xs font-mono font-bold text-indigo-300 flex items-center justify-center space-x-1.5 transition-colors shadow-[0_0_10px_rgba(99,102,241,0.2)] active:scale-95"
+                      className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 rounded-xl text-xs font-mono font-bold text-indigo-900 flex items-center justify-center space-x-1.5 transition-colors shadow-2xs active:scale-95"
                     >
                       <Eye size={13}/>
                       <span>ดูฉบับมีลายเซ็น</span>
                     </button>
                     <button 
                       onClick={() => onRequestDownload(task.signedFileUrl || task.signedFileId, task.signedFileName)}
-                      className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-xl text-indigo-300 transition-colors"
+                      className="p-2 bg-stone-100 hover:bg-stone-200 border border-stone-300 rounded-xl text-stone-700 transition-colors shadow-2xs"
                       title="ดาวน์โหลดเก็บไว้ในเครื่อง"
                     >
                       <Download size={13}/>
@@ -2303,30 +2295,30 @@ function Retro80sTaskDetailView({
               </div>
 
               {/* 3. ใบงานแจ้งซ่อม */}
-              <div className="p-4 bg-black/40 rounded-2xl border border-cyan-500/30 flex flex-col justify-between shadow-[0_0_15px_rgba(6,182,212,0.1)]">
+              <div className="p-4 bg-white rounded-2xl border-2 border-sky-200 flex flex-col justify-between shadow-2xs">
                 <div>
-                  <span className="text-[10px] font-mono font-bold text-cyan-400 uppercase tracking-widest block mb-1">3. ใบงานแจ้งซ่อม</span>
+                  <span className="text-[10px] font-mono font-bold text-sky-800 uppercase tracking-widest block mb-1">3. ใบงานแจ้งซ่อม</span>
                   {(task.taskFileUrl || task.taskFileId) ? (
                     <div>
-                      <p className="text-xs font-mono font-bold text-cyan-200 truncate" title={task.taskFileName}>{task.taskFileName || 'task_order.pdf'}</p>
-                      <span className="text-[10px] text-cyan-400 font-mono font-medium">✓ แนบใบงานแล้ว</span>
+                      <p className="text-xs font-mono font-bold text-stone-800 truncate" title={task.taskFileName}>{task.taskFileName || 'task_order.pdf'}</p>
+                      <span className="text-[10px] text-sky-700 font-mono font-bold">✓ แนบใบงานแล้ว</span>
                     </div>
                   ) : (
-                    <span className="text-xs text-gray-500 font-mono italic">ยังไม่มีใบงาน</span>
+                    <span className="text-xs text-stone-400 font-mono italic">ยังไม่มีใบงาน</span>
                   )}
                 </div>
                 {(task.taskFileUrl || task.taskFileId) && (
                   <div className="mt-3 flex items-center gap-1.5">
                     <button 
                       onClick={() => onPreviewPdf && onPreviewPdf(task.taskFileUrl || task.taskFileId, `ใบงานแจ้งซ่อม: ${task.taskFileName || 'task_order.pdf'}`, task.taskFileName)}
-                      className="flex-1 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 rounded-xl text-xs font-mono font-bold text-cyan-300 flex items-center justify-center space-x-1.5 transition-colors shadow-[0_0_10px_rgba(6,182,212,0.2)] active:scale-95"
+                      className="flex-1 py-2 bg-sky-50 hover:bg-sky-100 border border-sky-300 rounded-xl text-xs font-mono font-bold text-sky-900 flex items-center justify-center space-x-1.5 transition-colors shadow-2xs active:scale-95"
                     >
                       <Eye size={13}/>
                       <span>เปิดดูใบงาน</span>
                     </button>
                     <button 
                       onClick={() => onRequestDownload(task.taskFileUrl || task.taskFileId, task.taskFileName)}
-                      className="p-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-xl text-cyan-300 transition-colors"
+                      className="p-2 bg-stone-100 hover:bg-stone-200 border border-stone-300 rounded-xl text-stone-700 transition-colors shadow-2xs"
                       title="ดาวน์โหลดเก็บไว้ในเครื่อง"
                     >
                       <Download size={13}/>
@@ -2339,23 +2331,23 @@ function Retro80sTaskDetailView({
         </div>
       )}
 
-      {/* Tab 2: Activity Timeline (80's Style) */}
+      {/* Tab 2: Activity Timeline */}
       {activeSubTab === 'timeline' && (
         <div className="pt-2">
-          <div className="p-4 bg-black/50 border border-pink-500/30 rounded-2xl">
+          <div className="p-4 bg-white border-2 border-stone-200 rounded-2xl shadow-2xs">
             <TimelineView timeline={task.timeline} />
           </div>
         </div>
       )}
 
       {/* Footer */}
-      <div className="flex justify-between items-center pt-4 border-t border-pink-500/20">
-        <span className="text-[10px] font-mono text-pink-300/60 uppercase">
-          V-TRACK OPERATION SYSTEM // RETRO TERMINAL
+      <div className="flex justify-between items-center pt-4 border-t-2 border-stone-200">
+        <span className="text-[10px] font-mono text-stone-500 uppercase">
+          V-TRACK OPERATION SYSTEM // 1980s EDITION
         </span>
         <button 
           onClick={onClose} 
-          className="px-8 py-3 rounded-xl text-pink-200 font-mono font-bold bg-white/10 hover:bg-white/20 border border-pink-500/30 text-xs uppercase tracking-wider transition-all"
+          className="px-8 py-3 rounded-xl text-stone-800 font-mono font-bold bg-stone-200 hover:bg-stone-300 border-t border-white border-b-2 border-stone-400 text-xs uppercase tracking-wider transition-all shadow-xs active:scale-95"
         >
           [ ปิดหน้าต่าง (CLOSE) ]
         </button>
@@ -2420,9 +2412,9 @@ function TaskDetailView({
         <div className="flex items-center space-x-2 self-end sm:self-center">
           <button 
             onClick={() => setViewMode('80s')}
-            className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-pink-50 text-[#FF007F] hover:bg-pink-100 border border-pink-200 transition-all flex items-center space-x-1"
+            className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-stone-100 text-stone-800 hover:bg-stone-200 border border-stone-300 transition-all flex items-center space-x-1 shadow-2xs"
           >
-            <span>🕹️ มุมมอง 80's</span>
+            <span>📻 มุมมอง 80's คลาสสิก</span>
           </button>
           <div className="flex bg-gray-100 p-1 rounded-xl">
             <button 
@@ -3018,17 +3010,17 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                         {/* File Attachment Badges */}
                         <div className="flex flex-wrap gap-1.5 mt-2.5">
                           {t.quoteFileUrl && (
-                            <span className="bg-amber-50 text-amber-700 text-[9px] px-2 py-0.5 rounded-md font-bold flex items-center gap-1 border border-amber-200/60">
+                            <span className="bg-amber-100/90 text-amber-900 text-[9px] px-2 py-0.5 rounded-[3px] font-bold flex items-center gap-1 border-t border-amber-200 border-b-2 border-amber-400 shadow-2xs">
                               <Paperclip size={9}/> มีใบเสนอราคา
                             </span>
                           )}
                           {t.signedFileUrl && (
-                            <span className="bg-indigo-50 text-indigo-700 text-[9px] px-2 py-0.5 rounded-md font-bold flex items-center gap-1 border border-indigo-200/60">
+                            <span className="bg-indigo-100/90 text-indigo-900 text-[9px] px-2 py-0.5 rounded-[3px] font-bold flex items-center gap-1 border-t border-indigo-200 border-b-2 border-indigo-400 shadow-2xs">
                               <ShieldCheck size={9}/> เซ็นต์อนุมัติแล้ว
                             </span>
                           )}
                           {t.taskFileUrl && (
-                            <span className="bg-blue-50 text-blue-700 text-[9px] px-2 py-0.5 rounded-md font-bold flex items-center gap-1 border border-blue-200/60">
+                            <span className="bg-blue-100/90 text-blue-900 text-[9px] px-2 py-0.5 rounded-[3px] font-bold flex items-center gap-1 border-t border-blue-200 border-b-2 border-blue-400 shadow-2xs">
                               <FileText size={9}/> มีใบงาน
                             </span>
                           )}
@@ -3326,9 +3318,9 @@ function Management({ tasks, settings, onSave, onDelete, onViewDetail, onRequest
 
                 {/* Badges for attachments on mobile */}
                 <div className="flex flex-wrap gap-1 pl-2">
-                  {t.quoteFileUrl && <span className="text-[9px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded font-bold">ใบเสนอราคา</span>}
-                  {t.signedFileUrl && <span className="text-[9px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-bold">เซ็นต์แล้ว</span>}
-                  {t.taskFileUrl && <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-bold">มีใบงาน</span>}
+                  {t.quoteFileUrl && <span className="text-[9px] bg-amber-100/90 text-amber-900 px-1.5 py-0.5 rounded-[3px] font-bold border-t border-amber-200 border-b border-amber-400 shadow-2xs">ใบเสนอราคา</span>}
+                  {t.signedFileUrl && <span className="text-[9px] bg-indigo-100/90 text-indigo-900 px-1.5 py-0.5 rounded-[3px] font-bold border-t border-indigo-200 border-b border-indigo-400 shadow-2xs">เซ็นต์แล้ว</span>}
+                  {t.taskFileUrl && <span className="text-[9px] bg-blue-100/90 text-blue-900 px-1.5 py-0.5 rounded-[3px] font-bold border-t border-blue-200 border-b border-blue-400 shadow-2xs">มีใบงาน</span>}
                 </div>
                 
                 {t.details && <div className="text-xs text-gray-500 bg-gray-50/80 p-3 rounded-xl border border-gray-100 line-clamp-2 pl-2 mx-2">{t.details}</div>}
@@ -3378,7 +3370,43 @@ function Management({ tasks, settings, onSave, onDelete, onViewDetail, onRequest
 
 function StatusTag({ label }) {
   const s = STATUSES.find(x => x.name === label);
-  return <span className="px-3 py-1 rounded-full text-[9px] font-bold whitespace-nowrap border border-white shadow-sm" style={{backgroundColor: s?.bgColor, color: s?.color}}>{label}</span>;
+  // 80's Classic Embossed DYMO Tape Style: High contrast, tactile bevels, crisp white font, zero synthwave blur
+  const tapeStyles = {
+    'รอใบเสนอราคา': { bg: '#475569', top: '#64748B', bottom: '#1E293B', dot: '#CBD5E1' },
+    'อยู่ระหว่างตรวจสอบใบเสนอราคา': { bg: '#B45309', top: '#D97706', bottom: '#78350F', dot: '#FDE68A' },
+    'อนุมัติใบเสนอราคาแล้ว': { bg: '#4338CA', top: '#6366F1', bottom: '#312E81', dot: '#C7D2FE' },
+    'เปิดใบงานในระบบแล้ว': { bg: '#1D4ED8', top: '#3B82F6', bottom: '#1E3A8A', dot: '#BFDBFE' },
+    'จบงานและรอรับเอกสารวางบิล': { bg: '#6D28D9', top: '#8B5CF6', bottom: '#4C1D95', dot: '#DDD6FE' },
+    'ได้รับเอกสารวางบิลแล้ว': { bg: '#BE185D', top: '#EC4899', bottom: '#831843', dot: '#FBCFE8' },
+    'ส่งเอกสารเบิกจ่ายแล้ว': { bg: '#047857', top: '#10B981', bottom: '#064E3B', dot: '#A7F3D0' },
+    'ยกเลิก': { bg: '#B91C1C', top: '#EF4444', bottom: '#7F1D1D', dot: '#FECACA' }
+  };
+
+  const tape = tapeStyles[label] || { 
+    bg: s?.color || '#334155', 
+    top: '#64748B', 
+    bottom: '#1E293B', 
+    dot: '#E2E8F0' 
+  };
+
+  return (
+    <span 
+      className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[4px] text-[10px] font-bold tracking-wider text-white whitespace-nowrap shadow-[0_1px_2px_rgba(0,0,0,0.2)] select-none shrink-0"
+      style={{
+        backgroundColor: tape.bg,
+        borderTop: `1.5px solid ${tape.top}`,
+        borderBottom: `2px solid ${tape.bottom}`,
+        borderLeft: '1px solid rgba(0,0,0,0.12)',
+        borderRight: '1px solid rgba(0,0,0,0.12)',
+        textShadow: '0 1px 1px rgba(0,0,0,0.4)',
+        letterSpacing: '0.03em'
+      }}
+      title={`สถานะ: ${label}`}
+    >
+      <span className="w-1.5 h-1.5 rounded-full inline-block shrink-0" style={{ backgroundColor: tape.dot }} />
+      <span>{label}</span>
+    </span>
+  );
 }
 
 function CalendarView({ tasks, onViewDetail }) {

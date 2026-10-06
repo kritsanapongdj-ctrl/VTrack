@@ -5,12 +5,11 @@ import {
   Upload, Search, Edit, Trash2, X, AlertCircle, Menu, ChevronLeft, ChevronRight, 
   User, Filter, CalendarDays, FileDown, Printer, Trash, MapPin, Building2, Briefcase,
   Paperclip, PenTool, CheckCircle2, Clock, AlertTriangle, ArrowRight, Download,
-  Lock, Unlock, HardDrive, History, Eye, RotateCcw, ShieldCheck, DollarSign, Radio, Sparkles
+  Lock, Unlock, HardDrive, History, Eye, RotateCcw, ShieldCheck, DollarSign, Radio, Sparkles, Loader2
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getFirestore, collection, doc, getDoc, setDoc, onSnapshot, addDoc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 // --- Firebase Initialization ---
@@ -28,7 +27,6 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'v-track-system';
 
 // =====================================================================
@@ -90,19 +88,141 @@ const isScheduleOverdue = (task) => {
   return today > task.endDate;
 };
 
-const deleteStorageFile = async (filePath) => {
-  if (!filePath) return;
+// --- Robust Firestore File Storage System ---
+const fileToBase64 = (fileOrBytes, mimeType = 'application/pdf') => {
+  return new Promise((resolve, reject) => {
+    if (fileOrBytes instanceof Uint8Array || fileOrBytes instanceof ArrayBuffer) {
+      let binary = '';
+      const bytes = new Uint8Array(fileOrBytes);
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const b64 = btoa(binary);
+      resolve(`data:${mimeType};base64,${b64}`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(fileOrBytes);
+  });
+};
+
+const base64ToBlob = (dataUrl, defaultType = 'application/pdf') => {
+  if (!dataUrl) return null;
+  const parts = dataUrl.split(';base64,');
+  const contentType = parts[0]?.replace('data:', '') || defaultType;
+  const raw = atob(parts[1] || parts[0]);
+  const rawLength = raw.length;
+  const uInt8Array = new Uint8Array(rawLength);
+  for (let i = 0; i < rawLength; ++i) {
+    uInt8Array[i] = raw.charCodeAt(i);
+  }
+  return new Blob([uInt8Array], { type: contentType });
+};
+
+const saveFileToStore = async (fileOrBytes, fileName, fileType = 'application/pdf') => {
+  const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const base64Data = await fileToBase64(fileOrBytes, fileType);
+  const size = fileOrBytes.size || fileOrBytes.byteLength || base64Data.length;
+  const chunkSize = 500000;
+
+  const fileRef = doc(db, 'artifacts', appId, 'public', 'data', 'vtrack_files', fileId);
+
+  if (base64Data.length < 800000) {
+    await setDoc(fileRef, {
+      id: fileId,
+      name: fileName,
+      type: fileType,
+      size,
+      isChunked: false,
+      data: base64Data,
+      createdAt: Date.now()
+    });
+  } else {
+    const totalChunks = Math.ceil(base64Data.length / chunkSize);
+    await setDoc(fileRef, {
+      id: fileId,
+      name: fileName,
+      type: fileType,
+      size,
+      isChunked: true,
+      totalChunks,
+      createdAt: Date.now()
+    });
+    const writePromises = [];
+    for (let i = 0; i < totalChunks; i++) {
+      const chunkRef = doc(db, 'artifacts', appId, 'public', 'data', 'vtrack_files', fileId, 'chunks', String(i));
+      writePromises.push(setDoc(chunkRef, {
+        index: i,
+        data: base64Data.slice(i * chunkSize, (i + 1) * chunkSize)
+      }));
+    }
+    await Promise.all(writePromises);
+  }
+
+  return {
+    fileId,
+    fileName,
+    fileSize: size,
+    fileUrl: `vtrack-file://${fileId}`
+  };
+};
+
+const getFileDataUrl = async (fileUrlOrId) => {
+  if (!fileUrlOrId) return null;
+  if (fileUrlOrId.startsWith('data:') || fileUrlOrId.startsWith('http://') || fileUrlOrId.startsWith('https://')) {
+    return fileUrlOrId;
+  }
+  const fileId = fileUrlOrId.replace('vtrack-file://', '');
+  const fileRef = doc(db, 'artifacts', appId, 'public', 'data', 'vtrack_files', fileId);
+  const snap = await getDoc(fileRef);
+  if (!snap.exists()) {
+    throw new Error('ไม่พบเอกสารในระบบ');
+  }
+  const meta = snap.data();
+  if (!meta.isChunked) {
+    return meta.data;
+  }
+  const chunksCol = collection(db, 'artifacts', appId, 'public', 'data', 'vtrack_files', fileId, 'chunks');
+  const chunksSnap = await getDocs(chunksCol);
+  const chunks = chunksSnap.docs.map(d => d.data()).sort((a, b) => a.index - b.index);
+  return chunks.map(c => c.data).join('');
+};
+
+const deleteFileFromStore = async (fileUrlOrId) => {
+  if (!fileUrlOrId) return;
   try {
-    const fRef = storageRef(storage, filePath);
-    await deleteObject(fRef);
+    const fileId = fileUrlOrId.replace('vtrack-file://', '');
+    const fileRef = doc(db, 'artifacts', appId, 'public', 'data', 'vtrack_files', fileId);
+    const snap = await getDoc(fileRef);
+    if (snap.exists()) {
+      const meta = snap.data();
+      if (meta.isChunked) {
+        const chunksCol = collection(db, 'artifacts', appId, 'public', 'data', 'vtrack_files', fileId, 'chunks');
+        const chunksSnap = await getDocs(chunksCol);
+        await Promise.all(chunksSnap.docs.map(d => deleteDoc(d.ref)));
+      }
+      await deleteDoc(fileRef);
+    }
   } catch (err) {
-    console.warn("Storage deletion ignored:", err);
+    console.warn("Delete file error ignored:", err);
   }
 };
 
-const stampSignatureOnPdf = async (pdfUrl, signaturePngBase64) => {
-  const response = await fetch(pdfUrl);
-  const existingPdfBytes = await response.arrayBuffer();
+const stampSignatureOnPdf = async (pdfUrlOrId, signaturePngBase64) => {
+  const dataUrl = await getFileDataUrl(pdfUrlOrId);
+  if (!dataUrl) throw new Error("ไม่พบไฟล์เอกสารสำหรับเซ็นต์");
+
+  const base64Content = dataUrl.split(';base64,')[1];
+  const binaryString = atob(base64Content);
+  const len = binaryString.length;
+  const existingPdfBytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    existingPdfBytes[i] = binaryString.charCodeAt(i);
+  }
+
   const pdfDoc = await PDFDocument.load(existingPdfBytes);
 
   const pngImage = await pdfDoc.embedPng(signaturePngBase64);
@@ -386,34 +506,37 @@ export default function App() {
   const handleUploadQuote = async (task, file) => {
     if (!file) return;
     try {
-      const path = `quotations/${task.id || Date.now()}_${Date.now()}_${file.name}`;
-      const fRef = storageRef(storage, path);
-      const snapshot = await uploadBytes(fRef, file);
-      const downloadUrl = await getDownloadURL(snapshot.ref);
+      const saveRes = await saveFileToStore(file, file.name, file.type || 'application/pdf');
 
       const updatedTimeline = appendTimelineEvent(task.timeline, {
         type: 'quote_upload',
         fileName: file.name,
-        fileSize: file.size,
-        note: `แนบใบเสนอราคา: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`
+        fileSize: saveRes.fileSize,
+        note: `แนบใบเสนอราคา: ${file.name} (${(saveRes.fileSize / 1024).toFixed(1)} KB)`
       });
 
       const updatedData = {
         ...task,
-        quoteFileUrl: downloadUrl,
-        quoteFileName: file.name,
-        quoteFilePath: snapshot.ref.fullPath,
-        quoteFileSize: file.size,
+        quoteFileUrl: saveRes.fileUrl,
+        quoteFileId: saveRes.fileId,
+        quoteFileName: saveRes.fileName,
+        quoteFileSize: saveRes.fileSize,
         status: 'อยู่ระหว่างตรวจสอบใบเสนอราคา',
         statusUpdatedAt: Date.now(),
         timeline: updatedTimeline
       };
 
       await saveTask(updatedData, true, task.id);
+      if (viewDetailTask && viewDetailTask.id === task.id) {
+        setViewDetailTask(prev => ({
+          ...prev,
+          ...updatedData
+        }));
+      }
       triggerEmailNotification(task, 'quotation_uploaded', {
-        fileName: file.name,
-        fileUrl: downloadUrl,
-        fileSize: file.size
+        fileName: saveRes.fileName,
+        fileUrl: saveRes.fileUrl,
+        fileSize: saveRes.fileSize
       });
       alert("แนบใบเสนอราคาเรียบร้อยแล้ว สถานะเปลี่ยนเป็น 'อยู่ระหว่างตรวจสอบใบเสนอราคา'");
     } catch (err) {
@@ -423,72 +546,90 @@ export default function App() {
   };
 
   const handleConfirmSign = async (task, signaturePngDataUrl) => {
-    if (!task.quoteFileUrl) {
+    const fileSource = task.quoteFileUrl || task.quoteFileId;
+    if (!fileSource) {
       alert("ไม่พบไฟล์ใบเสนอราคาต้นฉบับ");
       return;
     }
-    const signedPdfBytes = await stampSignatureOnPdf(task.quoteFileUrl, signaturePngDataUrl);
-    const path = `signed_quotations/${task.id}_${Date.now()}_signed.pdf`;
-    const fRef = storageRef(storage, path);
-    const snapshot = await uploadBytes(fRef, signedPdfBytes, { contentType: 'application/pdf' });
-    const downloadUrl = await getDownloadURL(snapshot.ref);
+    try {
+      const signedPdfBytes = await stampSignatureOnPdf(fileSource, signaturePngDataUrl);
+      const signedFileName = `signed_${task.quoteFileName || 'quotation.pdf'}`;
+      const saveRes = await saveFileToStore(signedPdfBytes, signedFileName, 'application/pdf');
 
-    const updatedTimeline = appendTimelineEvent(task.timeline, {
-      type: 'signed',
-      by: 'เจ้าหน้าที่',
-      note: 'ตรวจรับและเซ็นต์อนุมัติใบเสนอราคาเรียบร้อย'
-    });
+      const updatedTimeline = appendTimelineEvent(task.timeline, {
+        type: 'signed',
+        by: 'เจ้าหน้าที่',
+        note: 'ตรวจรับและเซ็นต์อนุมัติใบเสนอราคาเรียบร้อย'
+      });
 
-    const updatedData = {
-      ...task,
-      signedFileUrl: downloadUrl,
-      signedFileName: `signed_${task.quoteFileName || 'quotation.pdf'}`,
-      signedFilePath: snapshot.ref.fullPath,
-      signedFileSize: signedPdfBytes.byteLength,
-      signedAt: Date.now(),
-      status: 'อนุมัติใบเสนอราคาแล้ว',
-      statusUpdatedAt: Date.now(),
-      timeline: updatedTimeline
-    };
+      const updatedData = {
+        ...task,
+        signedFileUrl: saveRes.fileUrl,
+        signedFileId: saveRes.fileId,
+        signedFileName: saveRes.fileName,
+        signedFileSize: saveRes.fileSize,
+        signedAt: Date.now(),
+        status: 'อนุมัติใบเสนอราคาแล้ว',
+        statusUpdatedAt: Date.now(),
+        timeline: updatedTimeline
+      };
 
-    await saveTask(updatedData, true, task.id);
-    alert("เซ็นต์ตรวจรับและอนุมัติใบเสนอราคาเรียบร้อยแล้ว!");
+      await saveTask(updatedData, true, task.id);
+      if (viewDetailTask && viewDetailTask.id === task.id) {
+        setViewDetailTask(prev => ({
+          ...prev,
+          ...updatedData
+        }));
+      }
+      alert("เซ็นต์ตรวจรับและอนุมัติใบเสนอราคาเรียบร้อยแล้ว!");
+    } catch (err) {
+      console.error("Signature stamping error:", err);
+      alert("เกิดข้อผิดพลาดในการประทับตราลายเซ็น: " + err.message);
+    }
   };
 
   const handleConfirmTaskOrder = async (task, { file, taskNo, startDate, endDate }) => {
-    const path = `task_orders/${task.id}_${Date.now()}_${file.name}`;
-    const fRef = storageRef(storage, path);
-    const snapshot = await uploadBytes(fRef, file);
-    const downloadUrl = await getDownloadURL(snapshot.ref);
+    try {
+      const saveRes = await saveFileToStore(file, file.name, file.type || 'application/pdf');
 
-    const updatedTimeline = appendTimelineEvent(task.timeline, {
-      type: 'task_order_opened',
-      taskNo,
-      startDate,
-      endDate,
-      fileName: file.name,
-      note: `แนบใบงานแจ้งซ่อม #${taskNo} แผนงาน ${startDate} ถึง ${endDate}`
-    });
+      const updatedTimeline = appendTimelineEvent(task.timeline, {
+        type: 'task_order_opened',
+        taskNo,
+        startDate,
+        endDate,
+        fileName: file.name,
+        note: `แนบใบงานแจ้งซ่อม #${taskNo} แผนงาน ${startDate} ถึง ${endDate}`
+      });
 
-    const updatedData = {
-      ...task,
-      taskFileUrl: downloadUrl,
-      taskFileName: file.name,
-      taskFilePath: snapshot.ref.fullPath,
-      taskFileSize: file.size,
-      taskNo,
-      startDate,
-      endDate,
-      originalStartDate: task.originalStartDate || startDate,
-      originalEndDate: task.originalEndDate || endDate,
-      aptDate: startDate,
-      status: 'เปิดใบงานในระบบแล้ว',
-      statusUpdatedAt: Date.now(),
-      timeline: updatedTimeline
-    };
+      const updatedData = {
+        ...task,
+        taskFileUrl: saveRes.fileUrl,
+        taskFileId: saveRes.fileId,
+        taskFileName: saveRes.fileName,
+        taskFileSize: saveRes.fileSize,
+        taskNo,
+        startDate,
+        endDate,
+        originalStartDate: task.originalStartDate || startDate,
+        originalEndDate: task.originalEndDate || endDate,
+        aptDate: startDate,
+        status: 'เปิดใบงานในระบบแล้ว',
+        statusUpdatedAt: Date.now(),
+        timeline: updatedTimeline
+      };
 
-    await saveTask(updatedData, true, task.id);
-    alert("แนบใบงานและเปิดงานในระบบเรียบร้อยแล้ว!");
+      await saveTask(updatedData, true, task.id);
+      if (viewDetailTask && viewDetailTask.id === task.id) {
+        setViewDetailTask(prev => ({
+          ...prev,
+          ...updatedData
+        }));
+      }
+      alert("แนบใบงานและเปิดงานในระบบเรียบร้อยแล้ว!");
+    } catch (err) {
+      console.error("Task order upload error:", err);
+      alert("เกิดข้อผิดพลาดในการแนบใบงาน: " + err.message);
+    }
   };
 
   const handleConfirmReschedule = async (task, { newStartDate, newEndDate, reason }) => {
@@ -515,39 +656,47 @@ export default function App() {
   };
 
   const handleConfirmCancel = async (task, reason) => {
-    if (task.quoteFilePath) await deleteStorageFile(task.quoteFilePath);
-    if (task.taskFilePath) await deleteStorageFile(task.taskFilePath);
-    if (task.signedFilePath) await deleteStorageFile(task.signedFilePath);
+    try {
+      if (task.quoteFileUrl || task.quoteFileId) await deleteFileFromStore(task.quoteFileUrl || task.quoteFileId);
+      if (task.taskFileUrl || task.taskFileId) await deleteFileFromStore(task.taskFileUrl || task.taskFileId);
+      if (task.signedFileUrl || task.signedFileId) await deleteFileFromStore(task.signedFileUrl || task.signedFileId);
 
-    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'vtrack_tasks', task.id);
-    const updatedTimeline = appendTimelineEvent(task.timeline, {
-      type: 'cancelled',
-      reason,
-      by: 'ผู้ใช้'
-    });
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'vtrack_tasks', task.id);
+      const updatedTimeline = appendTimelineEvent(task.timeline, {
+        type: 'cancelled',
+        reason,
+        by: 'ผู้ใช้'
+      });
 
-    await updateDoc(docRef, {
-      isDeleted: true,
-      status: 'ยกเลิก',
-      cancelReason: reason,
-      cancelledAt: Date.now(),
-      quoteFileUrl: null,
-      quoteFileName: null,
-      quoteFilePath: null,
-      taskFileUrl: null,
-      taskFileName: null,
-      taskFilePath: null,
-      signedFileUrl: null,
-      signedFileName: null,
-      signedFilePath: null,
-      timeline: updatedTimeline,
-      updatedAt: Date.now()
-    });
+      await updateDoc(docRef, {
+        isDeleted: true,
+        status: 'ยกเลิก',
+        cancelReason: reason,
+        cancelledAt: Date.now(),
+        quoteFileUrl: null,
+        quoteFileId: null,
+        quoteFileName: null,
+        quoteFilePath: null,
+        taskFileUrl: null,
+        taskFileId: null,
+        taskFileName: null,
+        taskFilePath: null,
+        signedFileUrl: null,
+        signedFileId: null,
+        signedFileName: null,
+        signedFilePath: null,
+        timeline: updatedTimeline,
+        updatedAt: Date.now()
+      });
 
-    if (viewDetailTask && viewDetailTask.id === task.id) {
-      setViewDetailTask(null);
+      if (viewDetailTask && viewDetailTask.id === task.id) {
+        setViewDetailTask(null);
+      }
+      alert("ยกเลิกใบงานและทำความสะอาดไฟล์ในพื้นที่จัดเก็บเรียบร้อยแล้ว");
+    } catch (err) {
+      console.error("Confirm cancel error:", err);
+      alert("เกิดข้อผิดพลาดในการยกเลิก: " + err.message);
     }
-    alert("ยกเลิกใบงานและทำความสะอาดไฟล์ในพื้นที่จัดเก็บเรียบร้อยแล้ว");
   };
 
   const handleRestoreTask = async (task) => {
@@ -592,10 +741,38 @@ export default function App() {
     }
   };
 
+  const executeDownload = async (urlOrId, filename) => {
+    try {
+      if (!urlOrId) return;
+      if (urlOrId.startsWith('http://') || urlOrId.startsWith('https://')) {
+        window.open(urlOrId, '_blank');
+        return;
+      }
+      const dataUrl = await getFileDataUrl(urlOrId);
+      if (!dataUrl) {
+        alert("ไม่พบข้อมูลไฟล์ในระบบ");
+        return;
+      }
+      const blob = base64ToBlob(dataUrl);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename || 'document.pdf';
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 20000);
+    } catch (err) {
+      console.error("Open file error:", err);
+      alert("เกิดข้อผิดพลาดในการเปิดไฟล์: " + err.message);
+    }
+  };
+
   const handleRequestDownload = (url, filename) => {
     if (!url) return;
     if (isUnlocked) {
-      window.open(url, '_blank');
+      executeDownload(url, filename);
     } else {
       setPasscodeModal({
         isOpen: true,
@@ -603,7 +780,7 @@ export default function App() {
         onSuccess: () => {
           setIsUnlocked(true);
           setPasscodeModal({ isOpen: false, title: '', onSuccess: null });
-          window.open(url, '_blank');
+          executeDownload(url, filename);
         }
       });
     }
@@ -1506,6 +1683,7 @@ function Retro80sTaskDetailView({
   isUnlocked 
 }) {
   const [activeSubTab, setActiveSubTab] = useState('info'); // 'info' | 'timeline'
+  const [isUploadingQuote, setIsUploadingQuote] = useState(false);
   const isOverdueTask = isScheduleOverdue(task);
 
   const formatThaiDate = (dateStr) => {
@@ -1734,14 +1912,26 @@ function Retro80sTaskDetailView({
 
           {/* Quick Action Button for Vendor / Contractor */}
           <div className="p-4 bg-black/40 rounded-2xl border border-pink-500/30 flex flex-wrap items-center gap-3">
-            <label className="px-5 py-3 bg-gradient-to-r from-[#FF007F] via-[#FF1493] to-[#7928CA] hover:from-[#FF1A8C] hover:to-[#8E3DE8] text-white rounded-xl text-xs font-mono font-black cursor-pointer flex items-center space-x-2 shadow-[0_0_20px_rgba(255,0,127,0.5)] uppercase tracking-wider transition-all active:scale-95">
-              <Paperclip size={15}/>
-              <span>{task.quoteFileUrl ? '📎 แนบใบเสนอราคาใหม่ (PDF)' : '📎 แนบใบเสนอราคา (PDF)'}</span>
+            <label className={`px-5 py-3 bg-gradient-to-r from-[#FF007F] via-[#FF1493] to-[#7928CA] hover:from-[#FF1A8C] hover:to-[#8E3DE8] text-white rounded-xl text-xs font-mono font-black cursor-pointer flex items-center space-x-2 shadow-[0_0_20px_rgba(255,0,127,0.5)] uppercase tracking-wider transition-all active:scale-95 ${isUploadingQuote ? 'opacity-70 pointer-events-none' : ''}`}>
+              {isUploadingQuote ? <Loader2 size={15} className="animate-spin" /> : <Paperclip size={15}/>}
+              <span>{isUploadingQuote ? 'กำลังอัปโหลด...' : ((task.quoteFileUrl || task.quoteFileId) ? '📎 แนบใบเสนอราคาใหม่ (PDF)' : '📎 แนบใบเสนอราคา (PDF)')}</span>
               <input 
                 type="file" 
                 accept=".pdf,application/pdf" 
                 className="hidden" 
-                onChange={e => { if (e.target.files[0]) onUploadQuote(task, e.target.files[0]); }} 
+                disabled={isUploadingQuote}
+                onChange={async e => { 
+                  if (e.target.files && e.target.files[0]) {
+                    const picked = e.target.files[0];
+                    e.target.value = '';
+                    setIsUploadingQuote(true);
+                    try {
+                      await onUploadQuote(task, picked);
+                    } finally {
+                      setIsUploadingQuote(false);
+                    }
+                  }
+                }} 
               />
             </label>
 
@@ -1785,7 +1975,7 @@ function Retro80sTaskDetailView({
               <div className="p-4 bg-black/40 rounded-2xl border border-amber-500/30 flex flex-col justify-between shadow-[0_0_15px_rgba(245,158,11,0.1)]">
                 <div>
                   <span className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-widest block mb-1">1. ใบเสนอราคา</span>
-                  {task.quoteFileUrl ? (
+                  {(task.quoteFileUrl || task.quoteFileId) ? (
                     <div>
                       <p className="text-xs font-mono font-bold text-amber-200 truncate" title={task.quoteFileName}>{task.quoteFileName || 'ใบเสนอราคา.pdf'}</p>
                       <span className="text-[10px] text-emerald-400 font-mono font-medium">✓ แนบไฟล์แล้ว</span>
@@ -1794,9 +1984,9 @@ function Retro80sTaskDetailView({
                     <span className="text-xs text-gray-500 font-mono italic">ยังไม่มีไฟล์แนบ</span>
                   )}
                 </div>
-                {task.quoteFileUrl && (
+                {(task.quoteFileUrl || task.quoteFileId) && (
                   <button 
-                    onClick={() => onRequestDownload(task.quoteFileUrl, task.quoteFileName)}
+                    onClick={() => onRequestDownload(task.quoteFileUrl || task.quoteFileId, task.quoteFileName)}
                     className="mt-3 w-full py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 rounded-xl text-xs font-mono font-bold text-amber-300 flex items-center justify-center space-x-1.5 transition-colors"
                   >
                     <Download size={13}/>
@@ -1809,7 +1999,7 @@ function Retro80sTaskDetailView({
               <div className="p-4 bg-black/40 rounded-2xl border border-indigo-500/30 flex flex-col justify-between shadow-[0_0_15px_rgba(99,102,241,0.1)]">
                 <div>
                   <span className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-widest block mb-1">2. ลายเซ็นต์อนุมัติ</span>
-                  {task.signedFileUrl ? (
+                  {(task.signedFileUrl || task.signedFileId) ? (
                     <div>
                       <p className="text-xs font-mono font-bold text-indigo-200 truncate" title={task.signedFileName}>{task.signedFileName || 'signed_quote.pdf'}</p>
                       <span className="text-[10px] text-indigo-400 font-mono font-medium">✓ ประทับตราแล้ว</span>
@@ -1818,9 +2008,9 @@ function Retro80sTaskDetailView({
                     <span className="text-xs text-gray-500 font-mono italic">ยังไม่ได้รับการเซ็นต์</span>
                   )}
                 </div>
-                {task.signedFileUrl && (
+                {(task.signedFileUrl || task.signedFileId) && (
                   <button 
-                    onClick={() => onRequestDownload(task.signedFileUrl, task.signedFileName)}
+                    onClick={() => onRequestDownload(task.signedFileUrl || task.signedFileId, task.signedFileName)}
                     className="mt-3 w-full py-2 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/40 rounded-xl text-xs font-mono font-bold text-indigo-300 flex items-center justify-center space-x-1.5 transition-colors"
                   >
                     <Download size={13}/>
@@ -1833,7 +2023,7 @@ function Retro80sTaskDetailView({
               <div className="p-4 bg-black/40 rounded-2xl border border-cyan-500/30 flex flex-col justify-between shadow-[0_0_15px_rgba(6,182,212,0.1)]">
                 <div>
                   <span className="text-[10px] font-mono font-bold text-cyan-400 uppercase tracking-widest block mb-1">3. ใบงานแจ้งซ่อม</span>
-                  {task.taskFileUrl ? (
+                  {(task.taskFileUrl || task.taskFileId) ? (
                     <div>
                       <p className="text-xs font-mono font-bold text-cyan-200 truncate" title={task.taskFileName}>{task.taskFileName || 'task_order.pdf'}</p>
                       <span className="text-[10px] text-cyan-400 font-mono font-medium">✓ แนบใบงานแล้ว</span>
@@ -1842,9 +2032,9 @@ function Retro80sTaskDetailView({
                     <span className="text-xs text-gray-500 font-mono italic">ยังไม่มีใบงาน</span>
                   )}
                 </div>
-                {task.taskFileUrl && (
+                {(task.taskFileUrl || task.taskFileId) && (
                   <button 
-                    onClick={() => onRequestDownload(task.taskFileUrl, task.taskFileName)}
+                    onClick={() => onRequestDownload(task.taskFileUrl || task.taskFileId, task.taskFileName)}
                     className="mt-3 w-full py-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 rounded-xl text-xs font-mono font-bold text-cyan-300 flex items-center justify-center space-x-1.5 transition-colors"
                   >
                     <Download size={13}/>
@@ -1899,6 +2089,7 @@ function TaskDetailView({
 }) {
   const [viewMode, setViewMode] = useState(!isUnlocked ? '80s' : 'classic');
   const [activeSubTab, setActiveSubTab] = useState('info'); // 'info' | 'timeline'
+  const [isUploadingQuote, setIsUploadingQuote] = useState(false);
   const isOverdueTask = isScheduleOverdue(task);
 
   if (viewMode === '80s') {
@@ -1982,25 +2173,37 @@ function TaskDetailView({
           {/* Quick Action Buttons Bar */}
           <div className="flex flex-wrap gap-2.5 p-4 bg-gray-50/70 rounded-2xl border border-gray-100">
             {/* 1. แนบใบเสนอราคา (สามารถอัปโหลดได้ตลอด) */}
-            <label className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center space-x-1.5 shadow-sm transition-all active:scale-95">
-              <Paperclip size={14}/>
-              <span>{task.quoteFileUrl ? 'แนบใบเสนอราคาใหม่' : 'แนบใบเสนอราคา (PDF)'}</span>
+            <label className={`px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center space-x-1.5 shadow-sm transition-all active:scale-95 ${isUploadingQuote ? 'opacity-70 pointer-events-none' : ''}`}>
+              {isUploadingQuote ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14}/>}
+              <span>{isUploadingQuote ? 'กำลังอัปโหลด...' : ((task.quoteFileUrl || task.quoteFileId) ? 'แนบใบเสนอราคาใหม่' : 'แนบใบเสนอราคา (PDF)')}</span>
               <input 
                 type="file" 
                 accept=".pdf,application/pdf" 
                 className="hidden" 
-                onChange={e => { if (e.target.files[0]) onUploadQuote(task, e.target.files[0]); }} 
+                disabled={isUploadingQuote}
+                onChange={async e => { 
+                  if (e.target.files && e.target.files[0]) {
+                    const picked = e.target.files[0];
+                    e.target.value = '';
+                    setIsUploadingQuote(true);
+                    try {
+                      await onUploadQuote(task, picked);
+                    } finally {
+                      setIsUploadingQuote(false);
+                    }
+                  }
+                }} 
               />
             </label>
 
             {/* 2. เซ็นต์อนุมัติใบเสนอราคา (แสดงเมื่อมีไฟล์ใบเสนอราคา และยังไม่ถึงขั้นเปิดงาน) */}
-            {task.quoteFileUrl && (
+            {(task.quoteFileUrl || task.quoteFileId) && (
               <button 
                 onClick={() => onOpenSign(task)}
                 className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all active:scale-95"
               >
                 <PenTool size={14}/>
-                <span>{task.signedFileUrl ? 'เซ็นต์อนุมัติใหม่อีกครั้ง' : 'ตรวจรับและเซ็นต์อนุมัติ'}</span>
+                <span>{(task.signedFileUrl || task.signedFileId) ? 'เซ็นต์อนุมัติใหม่อีกครั้ง' : 'ตรวจรับและเซ็นต์อนุมัติ'}</span>
               </button>
             )}
 
@@ -2010,7 +2213,7 @@ function TaskDetailView({
               className="px-4 py-2.5 bg-[#003366] hover:bg-[#002244] text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all active:scale-95"
             >
               <FileText size={14}/>
-              <span>{task.taskFileUrl ? 'แนบใบงานแจ้งซ่อมใหม่' : 'แนบใบงานแจ้งซ่อม & เปิดงาน'}</span>
+              <span>{(task.taskFileUrl || task.taskFileId) ? 'แนบใบงานแจ้งซ่อมใหม่' : 'แนบใบงานแจ้งซ่อม & เปิดงาน'}</span>
             </button>
 
             {/* 4. ขอเลื่อนวัน */}
@@ -2099,7 +2302,7 @@ function TaskDetailView({
               <div className="p-4 bg-gray-50/80 rounded-2xl border border-gray-100 flex flex-col justify-between">
                 <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">1. ใบเสนอราคา</span>
-                  {task.quoteFileUrl ? (
+                  {(task.quoteFileUrl || task.quoteFileId) ? (
                     <div>
                       <p className="text-xs font-bold text-gray-800 truncate" title={task.quoteFileName}>{task.quoteFileName || 'ใบเสนอราคา.pdf'}</p>
                       <span className="text-[10px] text-green-600 font-medium">✓ แนบไฟล์แล้ว</span>
@@ -2108,9 +2311,9 @@ function TaskDetailView({
                     <span className="text-xs text-gray-400 italic">ยังไม่มีไฟล์แนบ</span>
                   )}
                 </div>
-                {task.quoteFileUrl && (
+                {(task.quoteFileUrl || task.quoteFileId) && (
                   <button 
-                    onClick={() => onRequestDownload(task.quoteFileUrl, task.quoteFileName)}
+                    onClick={() => onRequestDownload(task.quoteFileUrl || task.quoteFileId, task.quoteFileName)}
                     className="mt-3 w-full py-2 bg-white hover:bg-gray-100 border border-gray-200 rounded-xl text-xs font-bold text-[#003366] flex items-center justify-center space-x-1.5 shadow-2xs transition-colors"
                   >
                     <Download size={13}/>
@@ -2123,7 +2326,7 @@ function TaskDetailView({
               <div className="p-4 bg-gray-50/80 rounded-2xl border border-gray-100 flex flex-col justify-between">
                 <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">2. ลายเซ็นต์อนุมัติ</span>
-                  {task.signedFileUrl ? (
+                  {(task.signedFileUrl || task.signedFileId) ? (
                     <div>
                       <p className="text-xs font-bold text-indigo-700 truncate" title={task.signedFileName}>{task.signedFileName || 'signed_quote.pdf'}</p>
                       <span className="text-[10px] text-indigo-600 font-medium">✓ ประทับตราแล้ว</span>
@@ -2132,9 +2335,9 @@ function TaskDetailView({
                     <span className="text-xs text-gray-400 italic">ยังไม่ได้รับการเซ็นต์</span>
                   )}
                 </div>
-                {task.signedFileUrl && (
+                {(task.signedFileUrl || task.signedFileId) && (
                   <button 
-                    onClick={() => onRequestDownload(task.signedFileUrl, task.signedFileName)}
+                    onClick={() => onRequestDownload(task.signedFileUrl || task.signedFileId, task.signedFileName)}
                     className="mt-3 w-full py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-700 flex items-center justify-center space-x-1.5 shadow-2xs transition-colors"
                   >
                     <Download size={13}/>
@@ -2147,7 +2350,7 @@ function TaskDetailView({
               <div className="p-4 bg-gray-50/80 rounded-2xl border border-gray-100 flex flex-col justify-between">
                 <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">3. ใบงานแจ้งซ่อม</span>
-                  {task.taskFileUrl ? (
+                  {(task.taskFileUrl || task.taskFileId) ? (
                     <div>
                       <p className="text-xs font-bold text-blue-700 truncate" title={task.taskFileName}>{task.taskFileName || 'task_order.pdf'}</p>
                       <span className="text-[10px] text-blue-600 font-medium">✓ แนบใบงานแล้ว</span>
@@ -2156,9 +2359,9 @@ function TaskDetailView({
                     <span className="text-xs text-gray-400 italic">ยังไม่มีใบงาน</span>
                   )}
                 </div>
-                {task.taskFileUrl && (
+                {(task.taskFileUrl || task.taskFileId) && (
                   <button 
-                    onClick={() => onRequestDownload(task.taskFileUrl, task.taskFileName)}
+                    onClick={() => onRequestDownload(task.taskFileUrl || task.taskFileId, task.taskFileName)}
                     className="mt-3 w-full py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-xs font-bold text-blue-700 flex items-center justify-center space-x-1.5 shadow-2xs transition-colors"
                   >
                     <Download size={13}/>

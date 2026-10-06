@@ -805,36 +805,12 @@ export default function App() {
 
   const handleRequestDownload = (url, filename) => {
     if (!url) return;
-    if (isUnlocked) {
-      executeDownload(url, filename);
-    } else {
-      setPasscodeModal({
-        isOpen: true,
-        title: `กรุณากรอกรหัสผ่านผู้ดูแลเพื่อดาวน์โหลดไฟล์ ${filename || ''}`,
-        onSuccess: () => {
-          setIsUnlocked(true);
-          setPasscodeModal({ isOpen: false, title: '', onSuccess: null });
-          executeDownload(url, filename);
-        }
-      });
-    }
+    executeDownload(url, filename);
   };
 
   const handlePreviewPdf = (url, title, filename) => {
     if (!url) return;
-    if (isUnlocked) {
-      setPdfPreviewModal({ url, title: title || filename || 'เอกสาร PDF', filename });
-    } else {
-      setPasscodeModal({
-        isOpen: true,
-        title: `กรุณากรอกรหัสผ่านผู้ดูแลเพื่อเปิดดูเอกสาร ${filename || ''}`,
-        onSuccess: () => {
-          setIsUnlocked(true);
-          setPasscodeModal({ isOpen: false, title: '', onSuccess: null });
-          setPdfPreviewModal({ url, title: title || filename || 'เอกสาร PDF', filename });
-        }
-      });
-    }
+    setPdfPreviewModal({ url, title: title || filename || 'เอกสาร PDF', filename });
   };
 
   const clearAllData = async () => {
@@ -2256,7 +2232,7 @@ function Retro80sTaskDetailView({
           {/* Attached Documents in 80's Cyber Floppy / Cassette Cards */}
           <div className="space-y-3 pt-2">
             <h4 className="text-xs font-mono font-bold text-pink-300 uppercase tracking-widest flex items-center gap-1.5">
-              <Paperclip size={14}/> เอกสารแนบในระบบ (ดาวน์โหลดต้องใช้รหัสผ่าน Admin)
+              <Paperclip size={14}/> เอกสารแนบในระบบ (เปิดดูและดาวน์โหลดได้)
             </h4>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -2612,7 +2588,7 @@ function TaskDetailView({
           {/* Attached Files Section */}
           <div className="space-y-3 pt-4 border-t border-gray-100">
             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-              <Paperclip size={14}/> เอกสารแนบในระบบ (ดาวน์โหลดต้องใช้รหัสผ่าน Admin)
+              <Paperclip size={14}/> เอกสารแนบในระบบ (เปิดดูและดาวน์โหลดได้)
             </h4>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

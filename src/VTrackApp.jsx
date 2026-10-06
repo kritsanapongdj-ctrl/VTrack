@@ -5,7 +5,7 @@ import {
   Upload, Search, Edit, Trash2, X, AlertCircle, Menu, ChevronLeft, ChevronRight, 
   User, Filter, CalendarDays, FileDown, Printer, Trash, MapPin, Building2, Briefcase,
   Paperclip, PenTool, CheckCircle2, Clock, AlertTriangle, ArrowRight, Download,
-  Lock, Unlock, HardDrive, History, Eye, RotateCcw, ShieldCheck, DollarSign, Radio, Sparkles, Loader2
+  Lock, Unlock, HardDrive, History, Eye, RotateCcw, ShieldCheck, DollarSign, Radio, Sparkles, Loader2, Image as ImageIcon
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -265,14 +265,47 @@ const stampSignatureOnPdf = async (pdfUrlOrId, signaturePngBase64) => {
     color: rgb(0.35, 0.35, 0.45),
   });
 
+  const imgW = pngImage.width || 85;
+  const imgH = pngImage.height || 48;
+  const maxBoxW = 85;
+  const maxBoxH = 48;
+  const scale = Math.min(maxBoxW / imgW, maxBoxH / imgH);
+  const drawW = imgW * scale;
+  const drawH = imgH * scale;
+  const drawX = (stampX + stampW - 95) + (maxBoxW - drawW) / 2;
+  const drawY = (stampY + 8) + (maxBoxH - drawH) / 2;
+
   lastPage.drawImage(pngImage, {
-    x: stampX + stampW - 95,
-    y: stampY + 8,
-    width: 85,
-    height: 48,
+    x: drawX,
+    y: drawY,
+    width: drawW,
+    height: drawH,
   });
 
   return await pdfDoc.save();
+};
+
+const convertImageToPngDataUrl = (fileOrDataUrl) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || img.width || 300;
+      canvas.height = img.naturalHeight || img.height || 150;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    if (typeof fileOrDataUrl === 'string') {
+      img.src = fileOrDataUrl;
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => { img.src = reader.result; };
+      reader.onerror = reject;
+      reader.readAsDataURL(fileOrDataUrl);
+    }
+  });
 };
 
 const triggerEmailNotification = async (task, eventType, extraData = {}) => {
@@ -409,6 +442,7 @@ export default function App() {
   const [passcodeModal, setPasscodeModal] = useState({ isOpen: false, title: '', onSuccess: null });
   const [disbursementModalTask, setDisbursementModalTask] = useState(null);
   const [viewDetailTask, setViewDetailTask] = useState(null);
+  const [pdfPreviewModal, setPdfPreviewModal] = useState(null);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -786,6 +820,23 @@ export default function App() {
     }
   };
 
+  const handlePreviewPdf = (url, title, filename) => {
+    if (!url) return;
+    if (isUnlocked) {
+      setPdfPreviewModal({ url, title: title || filename || 'เอกสาร PDF', filename });
+    } else {
+      setPasscodeModal({
+        isOpen: true,
+        title: `กรุณากรอกรหัสผ่านผู้ดูแลเพื่อเปิดดูเอกสาร ${filename || ''}`,
+        onSuccess: () => {
+          setIsUnlocked(true);
+          setPasscodeModal({ isOpen: false, title: '', onSuccess: null });
+          setPdfPreviewModal({ url, title: title || filename || 'เอกสาร PDF', filename });
+        }
+      });
+    }
+  };
+
   const clearAllData = async () => {
     const tasksRef = collection(db, 'artifacts', appId, 'public', 'data', 'vtrack_tasks');
     const snapshot = await getDocs(tasksRef);
@@ -913,12 +964,22 @@ export default function App() {
               onOpenReschedule={(t) => setRescheduleModalTask(t)}
               onRequestCancel={(t) => setCancelModalTask(t)}
               onRequestDownload={handleRequestDownload}
+              onPreviewPdf={handlePreviewPdf}
               onRequestDisbursement={(t) => setDisbursementModalTask(t)}
               isUnlocked={isUnlocked}
             />
           </div>
         </div>
       )}
+
+      <PdfViewerModal
+        isOpen={!!pdfPreviewModal}
+        onClose={() => setPdfPreviewModal(null)}
+        fileUrlOrId={pdfPreviewModal?.url}
+        title={pdfPreviewModal?.title}
+        fileName={pdfPreviewModal?.filename}
+        onDownload={() => executeDownload(pdfPreviewModal?.url, pdfPreviewModal?.filename)}
+      />
 
       <SignaturePadModal 
         task={signatureModalTask} 
@@ -1231,15 +1292,154 @@ function CancelTaskModal({ task, isOpen, onClose, onConfirm }) {
   );
 }
 
+function PdfViewerModal({ isOpen, onClose, fileUrlOrId, title, fileName, onDownload }) {
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!isOpen || !fileUrlOrId) {
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+        setBlobUrl(null);
+      }
+      setLoading(true);
+      setError(null);
+      return;
+    }
+
+    let isMounted = true;
+    let localBlobUrl = null;
+
+    const loadPdf = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const dUrl = await getFileDataUrl(fileUrlOrId);
+        if (!isMounted) return;
+        if (!dUrl) {
+          throw new Error('ไม่พบข้อมูลไฟล์เอกสารในระบบ');
+        }
+        const blob = base64ToBlob(dUrl);
+        localBlobUrl = URL.createObjectURL(blob);
+        setBlobUrl(localBlobUrl);
+      } catch (err) {
+        if (isMounted) setError(err.message || 'ไม่สามารถเปิดเอกสารได้');
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    loadPdf();
+
+    return () => {
+      isMounted = false;
+      if (localBlobUrl) {
+        URL.revokeObjectURL(localBlobUrl);
+      }
+    };
+  }, [isOpen, fileUrlOrId]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center z-[120] p-2 md:p-6 animate-in fade-in duration-200">
+      <div className="bg-[#1e293b] border border-gray-700 w-full max-w-5xl h-[92vh] rounded-[2rem] flex flex-col overflow-hidden shadow-2xl relative">
+        {/* Header bar */}
+        <div className="flex items-center justify-between px-5 py-3.5 bg-[#0f172a] border-b border-gray-800 text-white shrink-0">
+          <div className="flex items-center space-x-3 truncate">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+              <FileText size={18} />
+            </div>
+            <div className="truncate text-left">
+              <h3 className="font-bold text-sm truncate text-white">{title || fileName || 'เอกสาร PDF'}</h3>
+              <p className="text-[10px] text-gray-400">พรีวิวอ่านเอกสารในระบบ (ไม่บันทึกลงหน่วยความจำเครื่อง)</p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 shrink-0">
+            {blobUrl && (
+              <a
+                href={blobUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gray-800 hover:bg-gray-700 text-gray-200 transition-colors"
+                title="เปิดในแท็บใหม่"
+              >
+                <Eye size={14} />
+                <span>เปิดแท็บใหม่</span>
+              </a>
+            )}
+            {onDownload && (
+              <button
+                onClick={onDownload}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                title="บันทึกไฟล์ลงเครื่อง"
+              >
+                <Download size={14} />
+                <span>ดาวน์โหลด</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+              title="ปิด"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Content Body */}
+        <div className="flex-1 bg-slate-900 flex items-center justify-center relative overflow-hidden">
+          {loading && (
+            <div className="flex flex-col items-center space-y-3 text-gray-400">
+              <Loader2 size={36} className="animate-spin text-blue-400" />
+              <p className="text-xs">กำลังโหลดเอกสารขึ้นอ่าน...</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-6 text-center text-red-400 max-w-md">
+              <AlertCircle size={36} className="mx-auto mb-2 text-red-400" />
+              <p className="text-sm font-bold">{error}</p>
+              <button
+                onClick={onClose}
+                className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-xl text-xs font-bold hover:bg-gray-700"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          )}
+
+          {!loading && !error && blobUrl && (
+            <iframe
+              src={`${blobUrl}#toolbar=1&navpanes=0`}
+              className="w-full h-full border-0 bg-white"
+              title={title || 'PDF Preview'}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
   const canvasRef = useRef(null);
+  const [signMode, setSignMode] = useState('draw'); // 'draw' | 'image'
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState(null);
+  const [uploadedImageName, setUploadedImageName] = useState('');
   const [signing, setSigning] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
     setHasDrawn(false);
+    setUploadedImage(null);
+    setUploadedImageName('');
+    setSignMode('draw');
     const timer = setTimeout(() => {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -1306,14 +1506,41 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
     setHasDrawn(false);
   };
 
+  const handleImageFileChange = async (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setUploadedImageName(file.name);
+      try {
+        const pngDataUrl = await convertImageToPngDataUrl(file);
+        setUploadedImage(pngDataUrl);
+      } catch (err) {
+        alert("ไม่สามารถอ่านรูปภาพได้: " + err.message);
+      }
+    }
+  };
+
   const handleConfirm = async () => {
-    if (!hasDrawn) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (signMode === 'draw' && !hasDrawn) {
+      alert("กรุณาลงลายมือชื่อก่อนยืนยัน");
+      return;
+    }
+    if (signMode === 'image' && !uploadedImage) {
+      alert("กรุณาเลือกไฟล์รูปภาพลายเซ็นต์ก่อนยืนยัน");
+      return;
+    }
+
     setSigning(true);
     try {
-      const pngDataUrl = canvas.toDataURL('image/png');
-      await onConfirm(task, pngDataUrl);
+      let finalSignatureDataUrl = '';
+      if (signMode === 'draw') {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        finalSignatureDataUrl = canvas.toDataURL('image/png');
+      } else {
+        finalSignatureDataUrl = uploadedImage;
+      }
+
+      await onConfirm(task, finalSignatureDataUrl);
       onClose();
     } catch (err) {
       console.error("Signature error:", err);
@@ -1322,6 +1549,8 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
       setSigning(false);
     }
   };
+
+  const canConfirm = signMode === 'draw' ? hasDrawn : !!uploadedImage;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
@@ -1335,37 +1564,96 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
           </div>
         </div>
 
-        <div className="space-y-2 mt-4">
-          <div className="flex justify-between items-center text-xs font-bold text-gray-500">
-            <span>ลงลายมือชื่อด้านล่าง (รองรับปากกาสไตลัส & สัมผัส)</span>
-            <button onClick={clearSignature} type="button" className="text-red-500 hover:underline flex items-center gap-1"><RotateCcw size={12}/> ล้างลายเซ็น</button>
-          </div>
+        {/* Mode Switcher Tabs */}
+        <div className="flex bg-indigo-50/70 p-1 rounded-2xl mb-4 border border-indigo-100">
+          <button
+            type="button"
+            onClick={() => setSignMode('draw')}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all ${signMode === 'draw' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-indigo-600'}`}
+          >
+            <PenTool size={14} />
+            <span>วาดลายเซ็นต์ (สไตลัส/สัมผัส)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSignMode('image')}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all ${signMode === 'image' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-indigo-600'}`}
+          >
+            <ImageIcon size={14} />
+            <span>แนบรูปลายเซ็นต์ (PNG/JPG)</span>
+          </button>
+        </div>
 
-          <div className="relative border-2 border-dashed border-indigo-200 rounded-2xl bg-indigo-50/20 overflow-hidden touch-none h-48 flex items-center justify-center">
-            <canvas
-              ref={canvasRef}
-              className="w-full h-full cursor-crosshair"
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
-            />
-            {!hasDrawn && (
-              <div className="pointer-events-none absolute text-center text-gray-300">
-                <PenTool size={24} className="mx-auto mb-1 opacity-40"/>
-                <span className="text-xs font-medium">เซ็นต์ชื่อที่นี่...</span>
+        {signMode === 'draw' ? (
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-xs font-bold text-gray-500">
+              <span>ลงลายมือชื่อด้านล่าง (รองรับปากกาสไตลัส & สัมผัส)</span>
+              <button onClick={clearSignature} type="button" className="text-red-500 hover:underline flex items-center gap-1"><RotateCcw size={12}/> ล้างลายเซ็น</button>
+            </div>
+
+            <div className="relative border-2 border-dashed border-indigo-200 rounded-2xl bg-indigo-50/20 overflow-hidden touch-none h-48 flex items-center justify-center">
+              <canvas
+                ref={canvasRef}
+                className="w-full h-full cursor-crosshair"
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+              />
+              {!hasDrawn && (
+                <div className="pointer-events-none absolute text-center text-gray-300">
+                  <PenTool size={24} className="mx-auto mb-1 opacity-40"/>
+                  <span className="text-xs font-medium">เซ็นต์ชื่อที่นี่...</span>
+                </div>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-400">ระบบจะทำการ Stamp ลายเซ็นต์ลงในหน้าสุดท้ายของใบเสนอราคา PDF (Fixed Zone) พร้อมบันทึกหลักฐานการอนุมัติ</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex justify-between items-center text-xs font-bold text-gray-500">
+              <span>เลือกไฟล์รูปภาพลายเซ็นต์ทางการ</span>
+              {uploadedImage && (
+                <button onClick={() => { setUploadedImage(null); setUploadedImageName(''); }} type="button" className="text-red-500 hover:underline flex items-center gap-1">
+                  <RotateCcw size={12}/> เปลี่ยนรูปภาพ
+                </button>
+              )}
+            </div>
+
+            {!uploadedImage ? (
+              <label className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 rounded-2xl bg-indigo-50/20 hover:bg-indigo-50/40 p-6 flex flex-col items-center justify-center cursor-pointer transition-all h-48 text-center">
+                <ImageIcon size={32} className="text-indigo-400 mb-2 opacity-80" />
+                <span className="text-xs font-bold text-indigo-700">คลิกเพื่อเลือกไฟล์รูปลายเซ็นต์</span>
+                <span className="text-[10px] text-gray-400 mt-1">รองรับ PNG (แนะนำพื้นหลังโปร่งแสง), JPG, JPEG, WebP</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/jpg"
+                  className="hidden"
+                  onChange={handleImageFileChange}
+                />
+              </label>
+            ) : (
+              <div className="border border-indigo-200 rounded-2xl bg-indigo-50/10 p-4 flex flex-col items-center justify-center h-48 relative">
+                <img
+                  src={uploadedImage}
+                  alt="ลายเซ็นต์ที่แนบ"
+                  className="max-h-36 max-w-full object-contain filter drop-shadow-sm"
+                />
+                <span className="absolute bottom-2 left-3 right-3 text-[10px] font-mono text-gray-500 text-center truncate">
+                  ✓ {uploadedImageName || 'รูปลายเซ็นต์พร้อมใช้งาน'}
+                </span>
               </div>
             )}
+            <p className="text-[11px] text-gray-400">รูปภาพจะถูกปรับขนาดและสแตมป์ลงในกล่องอนุมัติ (Fixed Zone) หน้าสุดท้ายของ PDF อัตโนมัติ</p>
           </div>
-          <p className="text-[11px] text-gray-400">ระบบจะทำการ Stamp ลายเซ็นต์ลงในหน้าสุดท้ายของใบเสนอราคา PDF (Fixed Zone) พร้อมบันทึกหลักฐานการอนุมัติ</p>
-        </div>
+        )}
 
         <div className="flex gap-2 pt-4">
           <button type="button" onClick={onClose} disabled={signing} className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-gray-100 text-gray-600 hover:bg-gray-200">ยกเลิก</button>
           <button 
             type="button" 
             onClick={handleConfirm} 
-            disabled={!hasDrawn || signing} 
+            disabled={!canConfirm || signing} 
             className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center space-x-1.5"
           >
             {signing ? <span className="animate-spin mr-1">⏳</span> : <ShieldCheck size={16}/>}
@@ -1677,6 +1965,7 @@ function Retro80sTaskDetailView({
   onClose, 
   onUploadQuote, 
   onRequestDownload, 
+  onPreviewPdf,
   onOpenReschedule,
   onRequestDisbursement,
   onSwitchToClassic,
@@ -1985,13 +2274,22 @@ function Retro80sTaskDetailView({
                   )}
                 </div>
                 {(task.quoteFileUrl || task.quoteFileId) && (
-                  <button 
-                    onClick={() => onRequestDownload(task.quoteFileUrl || task.quoteFileId, task.quoteFileName)}
-                    className="mt-3 w-full py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 rounded-xl text-xs font-mono font-bold text-amber-300 flex items-center justify-center space-x-1.5 transition-colors"
-                  >
-                    <Download size={13}/>
-                    <span>ดาวน์โหลด PDF</span>
-                  </button>
+                  <div className="mt-3 flex items-center gap-1.5">
+                    <button 
+                      onClick={() => onPreviewPdf && onPreviewPdf(task.quoteFileUrl || task.quoteFileId, `ใบเสนอราคา: ${task.quoteFileName || 'quotation.pdf'}`, task.quoteFileName)}
+                      className="flex-1 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 rounded-xl text-xs font-mono font-bold text-amber-300 flex items-center justify-center space-x-1.5 transition-colors shadow-[0_0_10px_rgba(245,158,11,0.2)] active:scale-95"
+                    >
+                      <Eye size={13}/>
+                      <span>เปิดดูเอกสาร</span>
+                    </button>
+                    <button 
+                      onClick={() => onRequestDownload(task.quoteFileUrl || task.quoteFileId, task.quoteFileName)}
+                      className="p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl text-amber-300 transition-colors"
+                      title="ดาวน์โหลดเก็บไว้ในเครื่อง"
+                    >
+                      <Download size={13}/>
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -2009,13 +2307,22 @@ function Retro80sTaskDetailView({
                   )}
                 </div>
                 {(task.signedFileUrl || task.signedFileId) && (
-                  <button 
-                    onClick={() => onRequestDownload(task.signedFileUrl || task.signedFileId, task.signedFileName)}
-                    className="mt-3 w-full py-2 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/40 rounded-xl text-xs font-mono font-bold text-indigo-300 flex items-center justify-center space-x-1.5 transition-colors"
-                  >
-                    <Download size={13}/>
-                    <span>โหลดฉบับมีลายเซ็น</span>
-                  </button>
+                  <div className="mt-3 flex items-center gap-1.5">
+                    <button 
+                      onClick={() => onPreviewPdf && onPreviewPdf(task.signedFileUrl || task.signedFileId, `ฉบับเซ็นต์อนุมัติ: ${task.signedFileName || 'signed_quote.pdf'}`, task.signedFileName)}
+                      className="flex-1 py-2 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/50 rounded-xl text-xs font-mono font-bold text-indigo-300 flex items-center justify-center space-x-1.5 transition-colors shadow-[0_0_10px_rgba(99,102,241,0.2)] active:scale-95"
+                    >
+                      <Eye size={13}/>
+                      <span>ดูฉบับมีลายเซ็น</span>
+                    </button>
+                    <button 
+                      onClick={() => onRequestDownload(task.signedFileUrl || task.signedFileId, task.signedFileName)}
+                      className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-xl text-indigo-300 transition-colors"
+                      title="ดาวน์โหลดเก็บไว้ในเครื่อง"
+                    >
+                      <Download size={13}/>
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -2033,13 +2340,22 @@ function Retro80sTaskDetailView({
                   )}
                 </div>
                 {(task.taskFileUrl || task.taskFileId) && (
-                  <button 
-                    onClick={() => onRequestDownload(task.taskFileUrl || task.taskFileId, task.taskFileName)}
-                    className="mt-3 w-full py-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 rounded-xl text-xs font-mono font-bold text-cyan-300 flex items-center justify-center space-x-1.5 transition-colors"
-                  >
-                    <Download size={13}/>
-                    <span>ดาวน์โหลดใบงาน</span>
-                  </button>
+                  <div className="mt-3 flex items-center gap-1.5">
+                    <button 
+                      onClick={() => onPreviewPdf && onPreviewPdf(task.taskFileUrl || task.taskFileId, `ใบงานแจ้งซ่อม: ${task.taskFileName || 'task_order.pdf'}`, task.taskFileName)}
+                      className="flex-1 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 rounded-xl text-xs font-mono font-bold text-cyan-300 flex items-center justify-center space-x-1.5 transition-colors shadow-[0_0_10px_rgba(6,182,212,0.2)] active:scale-95"
+                    >
+                      <Eye size={13}/>
+                      <span>เปิดดูใบงาน</span>
+                    </button>
+                    <button 
+                      onClick={() => onRequestDownload(task.taskFileUrl || task.taskFileId, task.taskFileName)}
+                      className="p-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-xl text-cyan-300 transition-colors"
+                      title="ดาวน์โหลดเก็บไว้ในเครื่อง"
+                    >
+                      <Download size={13}/>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -2084,6 +2400,7 @@ function TaskDetailView({
   onOpenReschedule,
   onRequestCancel,
   onRequestDownload,
+  onPreviewPdf,
   onRequestDisbursement,
   isUnlocked
 }) {
@@ -2099,6 +2416,7 @@ function TaskDetailView({
         onClose={onClose} 
         onUploadQuote={onUploadQuote} 
         onRequestDownload={onRequestDownload} 
+        onPreviewPdf={onPreviewPdf}
         onOpenReschedule={onOpenReschedule}
         onRequestDisbursement={onRequestDisbursement}
         onSwitchToClassic={() => setViewMode('classic')}
@@ -2312,13 +2630,22 @@ function TaskDetailView({
                   )}
                 </div>
                 {(task.quoteFileUrl || task.quoteFileId) && (
-                  <button 
-                    onClick={() => onRequestDownload(task.quoteFileUrl || task.quoteFileId, task.quoteFileName)}
-                    className="mt-3 w-full py-2 bg-white hover:bg-gray-100 border border-gray-200 rounded-xl text-xs font-bold text-[#003366] flex items-center justify-center space-x-1.5 shadow-2xs transition-colors"
-                  >
-                    <Download size={13}/>
-                    <span>ดาวน์โหลด PDF</span>
-                  </button>
+                  <div className="mt-3 flex items-center gap-1.5">
+                    <button 
+                      onClick={() => onPreviewPdf && onPreviewPdf(task.quoteFileUrl || task.quoteFileId, `ใบเสนอราคา: ${task.quoteFileName || 'quotation.pdf'}`, task.quoteFileName)}
+                      className="flex-1 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-xs font-bold text-amber-800 flex items-center justify-center space-x-1.5 shadow-2xs transition-colors active:scale-95"
+                    >
+                      <Eye size={13}/>
+                      <span>เปิดดูเอกสาร</span>
+                    </button>
+                    <button 
+                      onClick={() => onRequestDownload(task.quoteFileUrl || task.quoteFileId, task.quoteFileName)}
+                      className="p-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-gray-600 transition-colors shadow-2xs"
+                      title="ดาวน์โหลดเก็บไว้ในเครื่อง"
+                    >
+                      <Download size={13}/>
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -2336,13 +2663,22 @@ function TaskDetailView({
                   )}
                 </div>
                 {(task.signedFileUrl || task.signedFileId) && (
-                  <button 
-                    onClick={() => onRequestDownload(task.signedFileUrl || task.signedFileId, task.signedFileName)}
-                    className="mt-3 w-full py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-700 flex items-center justify-center space-x-1.5 shadow-2xs transition-colors"
-                  >
-                    <Download size={13}/>
-                    <span>โหลดฉบับมีลายเซ็น</span>
-                  </button>
+                  <div className="mt-3 flex items-center gap-1.5">
+                    <button 
+                      onClick={() => onPreviewPdf && onPreviewPdf(task.signedFileUrl || task.signedFileId, `ฉบับเซ็นต์อนุมัติ: ${task.signedFileName || 'signed_quote.pdf'}`, task.signedFileName)}
+                      className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-700 flex items-center justify-center space-x-1.5 shadow-2xs transition-colors active:scale-95"
+                    >
+                      <Eye size={13}/>
+                      <span>ดูฉบับมีลายเซ็น</span>
+                    </button>
+                    <button 
+                      onClick={() => onRequestDownload(task.signedFileUrl || task.signedFileId, task.signedFileName)}
+                      className="p-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-gray-600 transition-colors shadow-2xs"
+                      title="ดาวน์โหลดเก็บไว้ในเครื่อง"
+                    >
+                      <Download size={13}/>
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -2360,13 +2696,22 @@ function TaskDetailView({
                   )}
                 </div>
                 {(task.taskFileUrl || task.taskFileId) && (
-                  <button 
-                    onClick={() => onRequestDownload(task.taskFileUrl || task.taskFileId, task.taskFileName)}
-                    className="mt-3 w-full py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-xs font-bold text-blue-700 flex items-center justify-center space-x-1.5 shadow-2xs transition-colors"
-                  >
-                    <Download size={13}/>
-                    <span>ดาวน์โหลดใบงาน</span>
-                  </button>
+                  <div className="mt-3 flex items-center gap-1.5">
+                    <button 
+                      onClick={() => onPreviewPdf && onPreviewPdf(task.taskFileUrl || task.taskFileId, `ใบงานแจ้งซ่อม: ${task.taskFileName || 'task_order.pdf'}`, task.taskFileName)}
+                      className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-xs font-bold text-blue-700 flex items-center justify-center space-x-1.5 shadow-2xs transition-colors active:scale-95"
+                    >
+                      <Eye size={13}/>
+                      <span>เปิดดูใบงาน</span>
+                    </button>
+                    <button 
+                      onClick={() => onRequestDownload(task.taskFileUrl || task.taskFileId, task.taskFileName)}
+                      className="p-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-gray-600 transition-colors shadow-2xs"
+                      title="ดาวน์โหลดเก็บไว้ในเครื่อง"
+                    >
+                      <Download size={13}/>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

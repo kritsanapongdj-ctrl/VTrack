@@ -5,7 +5,8 @@ import {
   Upload, Search, Edit, Trash2, X, AlertCircle, Menu, ChevronLeft, ChevronRight, 
   User, Filter, CalendarDays, FileDown, Printer, Trash, MapPin, Building2, Briefcase,
   Paperclip, PenTool, CheckCircle2, Clock, AlertTriangle, ArrowRight, Download,
-  Lock, Unlock, HardDrive, History, Eye, RotateCcw, ShieldCheck, DollarSign, Radio, Sparkles, Loader2, Image as ImageIcon
+  Lock, Unlock, HardDrive, History, Eye, RotateCcw, ShieldCheck, DollarSign, Radio, Sparkles, Loader2, Image as ImageIcon,
+  Mail, Send, Copy, Check
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -308,25 +309,111 @@ const convertImageToPngDataUrl = (fileOrDataUrl) => {
   });
 };
 
-const triggerEmailNotification = async (task, eventType, extraData = {}) => {
-  if (!GOOGLE_SHEETS_WEBHOOK_URL) return;
+const GAS_DEFAULT_SCRIPT = `function doPost(e) {
   try {
-    await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
+    var data = JSON.parse(e.postData.contents);
+    var toEmail = data.toEmail;
+    var subject = data.subject || ("V-Track แจ้งเตือน: " + (data.taskNo || ''));
+    var event = data.event;
+    
+    if (!toEmail) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "No recipient email" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var htmlBody = "";
+    if (event === "quotation_uploaded") {
+      htmlBody = '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
+        '<div style="background-color: #003366; color: #ffffff; padding: 16px; border-radius: 8px; text-align: center;">' +
+        '<h2 style="margin: 0; letter-spacing: 1px;">V-TRACK SYSTEM</h2>' +
+        '<p style="margin: 4px 0 0 0; font-size: 13px; color: #C5A059; font-weight: bold;">แจ้งเตือน: ผู้รับเหมาแนบใบเสนอราคาใหม่</p>' +
+        '</div>' +
+        '<div style="padding: 20px 0; color: #334155; line-height: 1.6;">' +
+        '<p>เรียน เจ้าหน้าที่ผู้ดูแลระบบ,</p>' +
+        '<p>ผู้รับเหมาได้ทำการแนบไฟล์ใบเสนอราคาสำหรับงานในระบบเรียบร้อยแล้ว มีรายละเอียดดังนี้:</p>' +
+        '<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">' +
+        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; width: 140px; color: #64748b;">เลขที่ใบงาน:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #003366; font-weight: bold;">' + (data.taskNo || '-') + '</td></tr>' +
+        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">โครงการ:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">' + (data.project || '-') + '</td></tr>' +
+        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">บริษัท/ผู้รับเหมา:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold;">' + (data.company || '-') + '</td></tr>' +
+        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">ชื่อไฟล์ที่แนบ:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">' + (data.fileName || '-') + '</td></tr>' +
+        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">สถานะปัจจุบัน:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #d97706; font-weight: bold;">อยู่ระหว่างตรวจสอบใบเสนอราคา</td></tr>' +
+        '</table>' +
+        '<p style="margin-top: 20px; font-size: 13px; color: #475569;">กรุณาเข้าสู่ระบบ V-Track เพื่อตรวจสอบความถูกต้องและดำเนินการอนุมัติหรือออกใบงานต่อไป</p>' +
+        '</div>' +
+        '<div style="text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #e2e8f0; padding-top: 12px;">' +
+        'อีเมลฉบับนี้ส่งโดยระบบอัตโนมัติ V-Track Operation System' +
+        '</div>' +
+        '</div>';
+    } else if (event === "task_order_attached") {
+      htmlBody = '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
+        '<div style="background-color: #003366; color: #ffffff; padding: 16px; border-radius: 8px; text-align: center;">' +
+        '<h2 style="margin: 0; letter-spacing: 1px;">V-TRACK SYSTEM</h2>' +
+        '<p style="margin: 4px 0 0 0; font-size: 13px; color: #C5A059; font-weight: bold;">แจ้งมอบหมายใบงานแจ้งซ่อม / กำหนดเข้าทำงาน</p>' +
+        '</div>' +
+        '<div style="padding: 20px 0; color: #334155; line-height: 1.6;">' +
+        '<p>เรียน ผู้รับเหมา (' + (data.company || '') + '),</p>' +
+        '<p>ทางเจ้าหน้าที่ได้ทำการออกใบงานแจ้งซ่อมและกำหนดช่วงเวลาปฏิบัติงานเรียบร้อยแล้ว มีรายละเอียดดังนี้:</p>' +
+        '<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">' +
+        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; width: 140px; color: #64748b;">เลขที่ใบงาน:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #003366; font-weight: bold;">' + (data.taskNo || '-') + '</td></tr>' +
+        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">โครงการ:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">' + (data.project || '-') + '</td></tr>' +
+        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">ช่วงวันเข้าทำงาน:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #059669; font-weight: bold;">' + (data.startDate || '-') + ' ถึง ' + (data.endDate || '-') + '</td></tr>' +
+        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">พื้นที่หน้างาน:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">' + (data.area || '-') + '</td></tr>' +
+        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">ไฟล์ใบงานแจ้งซ่อม:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">' + (data.fileName || '-') + '</td></tr>' +
+        '</table>' +
+        '<p style="margin-top: 20px; font-size: 13px; color: #475569;">ท่านสามารถเข้าสู่ระบบ V-Track เพื่อเปิดดูและดาวน์โหลดไฟล์ใบงานแจ้งซ่อมเก็บไว้ปฏิบัติงานได้ทันที</p>' +
+        '</div>' +
+        '<div style="text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #e2e8f0; padding-top: 12px;">' +
+        'อีเมลฉบับนี้ส่งโดยระบบอัตโนมัติ V-Track Operation System' +
+        '</div>' +
+        '</div>';
+    } else {
+      htmlBody = '<div style="font-family: Arial, sans-serif; padding: 20px;"><h3 style="color:#003366;">V-TRACK SYSTEM</h3><p>' + (data.message || 'ทดสอบการส่งอีเมลแจ้งเตือนสำเร็จ') + '</p></div>';
+    }
+    
+    MailApp.sendEmail({
+      to: toEmail,
+      subject: subject,
+      htmlBody: htmlBody
+    });
+    
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Email sent to " + toEmail }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+
+const triggerEmailNotification = async (task, eventType, extraData = {}, currentSettings = null) => {
+  const webhookUrl = currentSettings?.webhookUrl || GOOGLE_SHEETS_WEBHOOK_URL;
+  if (!webhookUrl) {
+    console.log('Email notification skipped: No Webhook URL configured in Settings');
+    return false;
+  }
+  try {
+    const payload = {
+      event: eventType,
+      project: task?.project || '',
+      company: task?.company || '',
+      taskNo: task?.taskNo || '',
+      status: task?.status || '',
+      area: task?.area || '',
+      cost: task?.cost || '',
+      details: task?.details || '',
+      ...extraData,
+      timestamp: new Date().toISOString()
+    };
+    await fetch(webhookUrl, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event: eventType,
-        project: task.project,
-        company: task.company,
-        taskNo: task.taskNo,
-        status: task.status,
-        ...extraData,
-        timestamp: new Date().toISOString()
-      })
+      body: JSON.stringify(payload)
     });
+    console.log('Email notification dispatched via webhook:', eventType, extraData.toEmail);
+    return true;
   } catch (e) {
     console.error('Email Webhook Notification Error:', e);
+    return false;
   }
 };
 
@@ -430,7 +517,13 @@ export default function App() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [printData, setPrintData] = useState(null);
   const [tasks, setTasks] = useState([]);
-  const [settings, setSettings] = useState({ projects: [], companies: [] });
+  const [settings, setSettings] = useState({ 
+    projects: [], 
+    companies: [], 
+    notificationEmail: '', 
+    webhookUrl: '', 
+    companyEmails: {} 
+  });
   const [loading, setLoading] = useState(true);
   const [systemError, setSystemError] = useState('');
 
@@ -461,9 +554,21 @@ export default function App() {
     const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setSettings({ projects: data.projects || [], companies: data.companies || [] });
+        setSettings({ 
+          projects: data.projects || [], 
+          companies: data.companies || [],
+          notificationEmail: data.notificationEmail || '',
+          webhookUrl: data.webhookUrl || '',
+          companyEmails: data.companyEmails || {}
+        });
       } else {
-        const def = { projects: ['โครงการ A'], companies: ['บริษัท ก'] };
+        const def = { 
+          projects: ['โครงการ A'], 
+          companies: ['บริษัท ก'],
+          notificationEmail: '',
+          webhookUrl: '',
+          companyEmails: {}
+        };
         setDoc(settingsRef, def).catch(console.error);
         setSettings(def);
       }
@@ -567,12 +672,21 @@ export default function App() {
           ...updatedData
         }));
       }
-      triggerEmailNotification(task, 'quotation_uploaded', {
-        fileName: saveRes.fileName,
-        fileUrl: saveRes.fileUrl,
-        fileSize: saveRes.fileSize
-      });
-      alert("แนบใบเสนอราคาเรียบร้อยแล้ว สถานะเปลี่ยนเป็น 'อยู่ระหว่างตรวจสอบใบเสนอราคา'");
+      // เงื่อนไข: หากสถานะเดิมคือ 'รอใบเสนอราคา' (หรือยังไม่มีใบเสนอราคามาก่อน) ส่งอีเมลแจ้งเตือนเจ้าหน้าที่
+      let notifiedAdmin = false;
+      if (prevStatus === 'รอใบเสนอราคา' || !task.quoteFileUrl) {
+        if (settings?.notificationEmail) {
+          notifiedAdmin = await triggerEmailNotification(updatedData, 'quotation_uploaded', {
+            toEmail: settings.notificationEmail,
+            subject: `[V-Track แจ้งเตือน] ผู้รับเหมาแนบใบเสนอราคา - ใบงาน #${task.taskNo} (${task.project})`,
+            fileName: saveRes.fileName,
+            fileUrl: saveRes.fileUrl,
+            fileSize: saveRes.fileSize,
+            recipientType: 'admin'
+          }, settings);
+        }
+      }
+      alert("แนบใบเสนอราคาเรียบร้อยแล้ว สถานะเปลี่ยนเป็น 'อยู่ระหว่างตรวจสอบใบเสนอราคา'" + (notifiedAdmin ? "\n(ส่งอีเมลแจ้งเตือนเจ้าหน้าที่ตรวจสอบแล้ว)" : ""));
     } catch (err) {
       console.error("Upload quote error:", err);
       alert("เกิดข้อผิดพลาดในการแนบใบเสนอราคา: " + err.message);
@@ -659,7 +773,23 @@ export default function App() {
           ...updatedData
         }));
       }
-      alert("แนบใบงานและเปิดงานในระบบเรียบร้อยแล้ว!");
+      // ฟังก์ชันที่ 2: ส่งอีเมลแจ้งเตือนไปยังผู้รับเหมาตามอีเมลที่บันทึกไว้ในตั้งค่า (ผูกกับชื่อบริษัท)
+      const contractorEmail = settings?.companyEmails?.[task.company];
+      let notifiedContractor = false;
+      if (contractorEmail) {
+        notifiedContractor = await triggerEmailNotification(updatedData, 'task_order_attached', {
+          toEmail: contractorEmail,
+          subject: `[V-Track แจ้งงาน] มอบหมายใบงานแจ้งซ่อม #${taskNo} - โครงการ ${task.project}`,
+          fileName: saveRes.fileName,
+          fileUrl: saveRes.fileUrl,
+          fileSize: saveRes.fileSize,
+          startDate,
+          endDate,
+          recipientType: 'contractor'
+        }, settings);
+      }
+
+      alert("แนบใบงานและเปิดงานในระบบเรียบร้อยแล้ว!" + (notifiedContractor ? `\n(ส่งอีเมลแจ้งผู้รับเหมาที่ ${contractorEmail} เรียบร้อยแล้ว)` : ""));
     } catch (err) {
       console.error("Task order upload error:", err);
       alert("เกิดข้อผิดพลาดในการแนบใบงาน: " + err.message);
@@ -3525,6 +3655,23 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
   const [p, setP] = useState(''); const [c, setC] = useState(''); const [st, setSt] = useState('');
   const [showCancelledArchive, setShowCancelledArchive] = useState(false);
   
+  const [notificationEmail, setNotificationEmail] = useState(settings.notificationEmail || '');
+  const [webhookUrl, setWebhookUrl] = useState(settings.webhookUrl || '');
+  const [compEmail, setCompEmail] = useState('');
+  const [companyEmails, setCompanyEmails] = useState(settings.companyEmails || {});
+  const [showGasModal, setShowGasModal] = useState(false);
+  const [testEmailStatus, setTestEmailStatus] = useState('');
+  const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [copiedGas, setCopiedGas] = useState(false);
+  const [editingComp, setEditingComp] = useState(null);
+  const [editEmailVal, setEditEmailVal] = useState('');
+
+  useEffect(() => {
+    setNotificationEmail(settings.notificationEmail || '');
+    setWebhookUrl(settings.webhookUrl || '');
+    setCompanyEmails(settings.companyEmails || {});
+  }, [settings]);
+  
   const availableMonths = useMemo(() => {
     const months = tasks.map(t => getEffectiveMonth(t)).filter(m => m !== '');
     return [...new Set([new Date().toISOString().slice(0, 7), ...months])].sort().reverse();
@@ -3567,9 +3714,110 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
   };
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  const handleAdd = (type) => {
-    if (type === 'P') { if(!p) return; updateSettings({...settings, projects: [...settings.projects, p]}); setP(''); } 
-    else { if(!c) return; updateSettings({...settings, companies: [...settings.companies, c]}); setC(''); }
+  const handleSaveEmailSettings = async () => {
+    await updateSettings({
+      ...settings,
+      notificationEmail: notificationEmail.trim(),
+      webhookUrl: webhookUrl.trim()
+    });
+    alert('บันทึกการตั้งค่าอีเมลแจ้งเตือนเรียบร้อยแล้ว!');
+  };
+
+  const handleTestEmail = async () => {
+    if (!notificationEmail.trim()) {
+      alert('กรุณากรอก "อีเมลสำหรับรับแจ้งเตือน (เจ้าหน้าที่)" ก่อนทำการทดสอบ');
+      return;
+    }
+    const currentWebhook = webhookUrl.trim() || GOOGLE_SHEETS_WEBHOOK_URL;
+    if (!currentWebhook) {
+      alert('กรุณากรอก "Google Apps Script Webhook URL" ก่อนทดสอบ (สามารถกดปุ่ม "ดูโค้ด & วิธีติดตั้ง Webhook ฟรี" เพื่อสร้างได้ฟรีใน 1 นาที)');
+      return;
+    }
+    setIsTestingEmail(true);
+    setTestEmailStatus('กำลังส่งอีเมลทดสอบ...');
+    try {
+      const ok = await triggerEmailNotification({
+        taskNo: 'TEST-001',
+        project: 'ทดสอบระบบแจ้งเตือน V-Track',
+        company: 'บริษัท ทดสอบ จำกัด',
+        status: 'ทดสอบการส่งอีเมล'
+      }, 'test_notification', {
+        toEmail: notificationEmail.trim(),
+        subject: '[V-Track Test] ทดสอบการเชื่อมต่อระบบแจ้งเตือนทางอีเมล',
+        message: 'ยินดีด้วย! ระบบแจ้งเตือนทางอีเมลของ V-Track เชื่อมต่อกับ Google Apps Script สำเร็จเรียบร้อยแล้ว สามารถใช้งานส่งอีเมลแจ้งเตือนอัตโนมัติได้ทันที'
+      }, { webhookUrl: currentWebhook });
+
+      if (ok) {
+        setTestEmailStatus('ส่งคำขอทดสอบสำเร็จ! กรุณาตรวจสอบอีเมลที่ ' + notificationEmail.trim());
+      } else {
+        setTestEmailStatus('เกิดข้อผิดพลาดในการเชื่อมต่อ Webhook');
+      }
+    } catch (err) {
+      setTestEmailStatus('ข้อผิดพลาด: ' + err.message);
+    } finally {
+      setIsTestingEmail(false);
+      setTimeout(() => setTestEmailStatus(''), 7000);
+    }
+  };
+
+  const handleCopyGasCode = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(GAS_DEFAULT_SCRIPT);
+    }
+    setCopiedGas(true);
+    setTimeout(() => setCopiedGas(false), 3000);
+  };
+
+  const handleAdd = async (type) => {
+    if (type === 'P') { 
+      if (!p.trim()) return; 
+      await updateSettings({ ...settings, projects: [...settings.projects, p.trim()] }); 
+      setP(''); 
+    } else { 
+      if (!c.trim()) return; 
+      const compName = c.trim();
+      const updatedCompanies = settings.companies.includes(compName) ? settings.companies : [...settings.companies, compName];
+      const updatedCompanyEmails = { ...companyEmails };
+      if (compEmail.trim()) {
+        updatedCompanyEmails[compName] = compEmail.trim();
+      }
+      setCompanyEmails(updatedCompanyEmails);
+      await updateSettings({ 
+        ...settings, 
+        companies: updatedCompanies,
+        companyEmails: updatedCompanyEmails
+      }); 
+      setC(''); 
+      setCompEmail('');
+    }
+  };
+
+  const handleDeleteCompany = async (item) => {
+    const updatedCompanies = settings.companies.filter(x => x !== item);
+    const updatedCompanyEmails = { ...companyEmails };
+    delete updatedCompanyEmails[item];
+    setCompanyEmails(updatedCompanyEmails);
+    await updateSettings({
+      ...settings,
+      companies: updatedCompanies,
+      companyEmails: updatedCompanyEmails
+    });
+  };
+
+  const handleSaveCompEmail = async (compName) => {
+    const updated = { ...companyEmails };
+    if (editEmailVal.trim()) {
+      updated[compName] = editEmailVal.trim();
+    } else {
+      delete updated[compName];
+    }
+    setCompanyEmails(updated);
+    setEditingComp(null);
+    setEditEmailVal('');
+    await updateSettings({
+      ...settings,
+      companyEmails: updated
+    });
   };
 
   const handleImport = (e) => {
@@ -3721,21 +3969,203 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
         )}
       </div>
 
-      {/* 4. การจัดการโครงการ & ร้านค้า */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col">
-          <h4 className="text-[10px] font-bold text-gray-400 mb-6 uppercase tracking-widest">โครงการ</h4>
-          <div className="flex space-x-2 mb-6"><input className="flex-1 p-3.5 bg-gray-50 rounded-2xl text-sm" value={p} onChange={e=>setP(e.target.value)}/><button onClick={()=>handleAdd('P')} className="bg-[#003366] text-white px-6 rounded-2xl text-sm">เพิ่ม</button></div>
-          <div className="space-y-1.5 max-h-60 overflow-auto">{settings.projects.map(item => (<div key={item} className="p-3 bg-gray-50 rounded-xl flex justify-between"><span className="text-xs font-bold text-gray-700">{item}</span><button onClick={()=>updateSettings({...settings, projects: settings.projects.filter(x=>x!==item)})} className="text-red-300"><X size={14}/></button></div>))}</div>
+      {/* 4. ระบบการแจ้งเตือนทางอีเมลอัตโนมัติ (Email Notifications) */}
+      <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-blue-50 text-[#003366] rounded-xl flex items-center justify-center">
+              <Mail size={20}/>
+            </div>
+            <div>
+              <h4 className="text-xs md:text-sm font-bold text-gray-800">ระบบการแจ้งเตือนทางอีเมลอัตโนมัติ (Email Notifications)</h4>
+              <p className="text-[10px] text-gray-400">ส่งอีเมลแจ้งเตือนเจ้าหน้าที่เมื่อมีใบเสนอราคา และแจ้งเตือนผู้รับเหมาเมื่อมีใบแจ้งซ่อม (ฟรี 100% ผ่าน Google Apps Script)</p>
+            </div>
+          </div>
+          <button 
+            type="button"
+            onClick={() => setShowGasModal(true)}
+            className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-[#003366] border border-blue-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 self-start sm:self-center shadow-2xs"
+          >
+            <span>📜 ดูโค้ด Webhook & วิธีตั้งค่าฟรี</span>
+          </button>
         </div>
-        <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col">
-          <h4 className="text-[10px] font-bold text-gray-400 mb-6 uppercase tracking-widest">ร้านค้า</h4>
-          <div className="flex space-x-2 mb-6"><input className="flex-1 p-3.5 bg-gray-50 rounded-2xl text-sm" value={c} onChange={e=>setC(e.target.value)}/><button onClick={()=>handleAdd('C')} className="bg-[#003366] text-white px-6 rounded-2xl text-sm">เพิ่ม</button></div>
-          <div className="space-y-1.5 max-h-60 overflow-auto">{settings.companies.map(item => (<div key={item} className="p-3 bg-gray-50 rounded-xl flex justify-between"><span className="text-xs font-bold text-gray-700">{item}</span><button onClick={()=>updateSettings({...settings, companies: settings.companies.filter(x=>x!==item)})} className="text-red-300"><X size={14}/></button></div>))}</div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+              <Mail size={12}/> อีเมลสำหรับรับแจ้งเตือน (เจ้าหน้าที่)
+            </label>
+            <input 
+              type="email" 
+              placeholder="e.g. admin@vtrack.com, officer@company.com" 
+              value={notificationEmail} 
+              onChange={e => setNotificationEmail(e.target.value)}
+              className="w-full p-3.5 bg-gray-50 rounded-2xl text-xs border border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#003366] outline-none font-medium text-gray-800"
+            />
+            <p className="text-[10px] text-gray-400">
+              * เมื่อผู้รับเหมาแนบใบเสนอราคาในรายการสถานะ <strong>'รอใบเสนอราคา'</strong> ระบบจะส่งอีเมลแจ้งเตือนมาที่นี่ทันที
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+              <span>🔗</span> Google Apps Script Webhook URL (ฟรี 100%)
+            </label>
+            <input 
+              type="url" 
+              placeholder="https://script.google.com/macros/s/.../exec" 
+              value={webhookUrl} 
+              onChange={e => setWebhookUrl(e.target.value)}
+              className="w-full p-3.5 bg-gray-50 rounded-2xl text-xs border border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#003366] outline-none font-mono text-gray-700"
+            />
+            <p className="text-[10px] text-gray-400">
+              * URL เว็บบริการจาก Google Apps Script (ส่งอีเมลฟรี 100 ฉบับ/วัน ไม่ต้องใช้บัตรเครดิต)
+            </p>
+          </div>
+        </div>
+
+        {testEmailStatus && (
+          <div className={`p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${testEmailStatus.includes('สำเร็จ') ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : testEmailStatus.includes('กำลัง') ? 'bg-blue-50 text-blue-800' : 'bg-red-50 text-red-800'}`}>
+            {isTestingEmail && <Loader2 size={14} className="animate-spin" />}
+            <span>{testEmailStatus}</span>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3 pt-2">
+          <button 
+            type="button"
+            onClick={handleSaveEmailSettings}
+            className="px-6 py-3 bg-[#003366] hover:bg-[#002244] text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs active:scale-95"
+          >
+            <CheckCircle2 size={15}/>
+            <span>บันทึกการตั้งค่าอีเมล</span>
+          </button>
+
+          <button 
+            type="button"
+            disabled={isTestingEmail}
+            onClick={handleTestEmail}
+            className="px-5 py-3 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-2xs active:scale-95 disabled:opacity-50"
+          >
+            {isTestingEmail ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
+            <span>{isTestingEmail ? 'กำลังส่งทดสอบ...' : 'ทดสอบส่งอีเมล (Test)'}</span>
+          </button>
         </div>
       </div>
 
-      {/* 5. พื้นที่อันตราย */}
+      {/* 5. การจัดการโครงการ & ร้านค้า/ผู้รับเหมา */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col">
+          <h4 className="text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-widest">โครงการ</h4>
+          <div className="flex space-x-2 mb-4">
+            <input 
+              className="flex-1 p-3 bg-gray-50 rounded-2xl text-xs border border-gray-200 focus:bg-white outline-none" 
+              placeholder="ชื่อโครงการใหม่"
+              value={p} 
+              onChange={e=>setP(e.target.value)}
+            />
+            <button onClick={()=>handleAdd('P')} className="bg-[#003366] text-white px-5 rounded-2xl text-xs font-bold">เพิ่ม</button>
+          </div>
+          <div className="space-y-1.5 max-h-60 overflow-auto pr-1 custom-scrollbar">
+            {settings.projects.map(item => (
+              <div key={item} className="p-3 bg-gray-50 rounded-xl flex justify-between items-center">
+                <span className="text-xs font-bold text-gray-700">{item}</span>
+                <button onClick={()=>updateSettings({...settings, projects: settings.projects.filter(x=>x!==item)})} className="text-red-300 hover:text-red-500">
+                  <X size={14}/>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col">
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">ร้านค้า / ผู้รับเหมา</h4>
+            <span className="text-[9px] text-gray-400 font-medium">ผูกอีเมลสำหรับส่งใบแจ้งซ่อม</span>
+          </div>
+          
+          <div className="space-y-2 mb-4 bg-gray-50/70 p-3 rounded-2xl border border-gray-100">
+            <input 
+              className="w-full p-2.5 bg-white rounded-xl text-xs border border-gray-200 focus:ring-1 focus:ring-[#003366] outline-none" 
+              placeholder="ชื่อบริษัท / ร้านค้า" 
+              value={c} 
+              onChange={e=>setC(e.target.value)}
+            />
+            <div className="flex space-x-2">
+              <input 
+                type="email"
+                className="flex-1 p-2.5 bg-white rounded-xl text-xs border border-gray-200 focus:ring-1 focus:ring-[#003366] outline-none" 
+                placeholder="อีเมลผู้รับเหมา (ถ้ามี)" 
+                value={compEmail} 
+                onChange={e=>setCompEmail(e.target.value)}
+              />
+              <button onClick={()=>handleAdd('C')} className="bg-[#003366] text-white px-5 rounded-xl text-xs font-bold shrink-0">
+                เพิ่ม
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2 max-h-60 overflow-auto pr-1 custom-scrollbar">
+            {settings.companies.map(item => {
+              const email = companyEmails[item];
+              const isEditing = editingComp === item;
+              return (
+                <div key={item} className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex flex-col gap-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-gray-800">{item}</span>
+                    <button onClick={()=>handleDeleteCompany(item)} className="text-red-300 hover:text-red-500" title="ลบร้านค้านี้">
+                      <X size={14}/>
+                    </button>
+                  </div>
+                  
+                  {isEditing ? (
+                    <div className="flex gap-1.5 mt-1">
+                      <input 
+                        type="email"
+                        value={editEmailVal}
+                        onChange={e => setEditEmailVal(e.target.value)}
+                        placeholder="อีเมลผู้รับเหมา"
+                        className="flex-1 p-1.5 text-xs bg-white rounded-lg border border-gray-300"
+                        autoFocus
+                      />
+                      <button 
+                        onClick={() => handleSaveCompEmail(item)}
+                        className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold"
+                      >
+                        บันทึก
+                      </button>
+                      <button 
+                        onClick={() => { setEditingComp(null); setEditEmailVal(''); }}
+                        className="px-2 py-1 bg-gray-200 text-gray-600 rounded-lg text-xs"
+                      >
+                        ยกเลิก
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between text-[11px]">
+                      {email ? (
+                        <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md font-mono flex items-center gap-1 border border-blue-100">
+                          <Mail size={10}/> {email}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 italic">ยังไม่ระบุอีเมล</span>
+                      )}
+                      <button 
+                        onClick={() => { setEditingComp(item); setEditEmailVal(email || ''); }}
+                        className="text-[10px] text-gray-500 hover:text-[#003366] font-medium underline ml-auto"
+                      >
+                        {email ? 'แก้ไขอีเมล' : '+ เพิ่มอีเมล'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* 6. พื้นที่อันตราย */}
       <div className="bg-red-50 p-10 rounded-[2.5rem] border border-red-100 shadow-sm text-center">
         <h4 className="text-[10px] font-bold text-red-400 mb-4 uppercase tracking-widest">พื้นที่อันตราย</h4>
         <button onClick={() => setShowClearConfirm(true)} className="bg-red-500 text-white px-12 py-4 rounded-2xl font-bold flex items-center mx-auto"><Trash size={18} className="mr-2"/> ล้างฐานข้อมูล</button>
@@ -3751,6 +4181,77 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
           </div>
         )}
       </div>
+
+      {/* Modal: Google Apps Script Code & Setup Instructions */}
+      {showGasModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
+          <div className="bg-white p-6 md:p-8 rounded-[2rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto text-left space-y-5 custom-scrollbar shadow-2xl">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#003366] flex items-center justify-center font-bold text-xs">
+                  GAS
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-800 text-base">วิธีติดตั้ง Google Apps Script (ส่งอีเมลฟรี 100%)</h3>
+                  <p className="text-[10px] text-gray-400">ทำตาม 4 ขั้นตอนง่ายๆ ใช้เวลาไม่เกิน 1 นาที</p>
+                </div>
+              </div>
+              <button onClick={() => setShowGasModal(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400"><X size={18}/></button>
+            </div>
+
+            <div className="space-y-3 text-xs text-gray-600 leading-relaxed">
+              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 space-y-1">
+                <p className="font-bold text-[#003366]">ขั้นตอนที่ 1:</p>
+                <p>เปิดเบราว์เซอร์ไปที่ <a href="https://script.google.com" target="_blank" rel="noreferrer" className="text-blue-600 underline font-bold">script.google.com</a> (ล็อกอินด้วยบัญชี Google ของท่าน) แล้วกดปุ่ม <strong>"+ โครงการใหม่ (New project)"</strong></p>
+              </div>
+
+              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 space-y-1">
+                <p className="font-bold text-[#003366]">ขั้นตอนที่ 2:</p>
+                <p>ลบโค้ดเดิมในหน้าจอออกทั้งหมด แล้วกดปุ่ม <strong>"คัดลอกโค้ด Google Apps Script"</strong> ด้านล่างนี้ นำไปวางแทนที่</p>
+              </div>
+
+              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 space-y-1">
+                <p className="font-bold text-[#003366]">ขั้นตอนที่ 3:</p>
+                <p>กดปุ่ม <strong>"การทำให้ใช้งานได้ (Deploy)"</strong> ด้านบนขวา ➔ เลือก <strong>"การทำให้ใช้งานได้รายการใหม่ (New deployment)"</strong> ➔ เลือกประเภทเป็น <strong>"เว็บแอป (Web app)"</strong>:</p>
+                <ul className="list-disc list-inside pl-2 space-y-0.5 text-gray-700">
+                  <li>เรียกใช้ในฐานะ (Execute as): <strong>ฉัน (Me)</strong></li>
+                  <li>ผู้ที่มีสิทธิ์เข้าถึง (Who has access): <strong>ทุกคน (Anyone)</strong></li>
+                </ul>
+              </div>
+
+              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 space-y-1">
+                <p className="font-bold text-[#003366]">ขั้นตอนที่ 4:</p>
+                <p>กด <strong>"ทำให้ใช้งานได้"</strong> และอนุญาตสิทธิ์เข้าถึง (Authorize) จากนั้นคัดลอก <strong>URL เว็บแอป (Web app URL)</strong> ที่ได้ นำมาวางลงในช่อง Webhook URL ในหน้าตั้งค่าของ V-Track เป็นอันเสร็จสมบูรณ์!</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-gray-700 font-mono">CODE: Code.gs</span>
+                <button 
+                  onClick={handleCopyGasCode}
+                  className="px-3.5 py-1.5 bg-[#003366] hover:bg-[#002244] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all active:scale-95"
+                >
+                  {copiedGas ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                  <span>{copiedGas ? 'คัดลอกโค้ดแล้ว!' : 'คัดลอกโค้ดทั้งหมด'}</span>
+                </button>
+              </div>
+              <pre className="p-4 bg-gray-900 text-gray-100 rounded-2xl text-[11px] font-mono overflow-x-auto max-h-60 custom-scrollbar leading-normal">
+                {GAS_DEFAULT_SCRIPT}
+              </pre>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button 
+                onClick={() => setShowGasModal(false)}
+                className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

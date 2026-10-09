@@ -341,13 +341,13 @@ const GAS_DEFAULT_SCRIPT = `function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    var subject = data.subject || ("[Task Flow] แจ้งเตือน: ใบงาน #" + taskNo + " (" + project + ")");
+    var subject = data.subject || ("[V-Track] แจ้งเตือน: ใบงาน #" + taskNo + " (" + project + ")");
     var plainBody = "";
     var htmlBody = "";
 
     // 1. กรณี: ผู้รับเหมาแนบใบเสนอราคาใหม่ (Quotation Uploaded - ผ่านเกณฑ์เมลองค์กร)
     if (event === "quotation_uploaded") {
-      subject = data.subject || ("[Task Flow] แจ้งเตือน: แนบใบเสนอราคาใหม่ - ใบงาน #" + taskNo + " (" + project + ")");
+      subject = data.subject || ("[V-Track] แจ้งเตือน: แนบใบเสนอราคาใหม่ - ใบงาน #" + taskNo + " (" + project + ")");
       
       plainBody = "[V-Track Task Flow System] แจ้งเตือน: ผู้รับเหมาแนบใบเสนอราคาใหม่\\n" +
         "==================================================\\n" +
@@ -420,7 +420,7 @@ const GAS_DEFAULT_SCRIPT = `function doPost(e) {
     } else if (event === "task_order_attached") {
       var startDate = data.startDate || "-";
       var endDate = data.endDate || "-";
-      subject = data.subject || ("[Task Flow] แจ้งมอบหมายงาน: ใบแจ้งซ่อม #" + taskNo + " - โครงการ " + project);
+      subject = data.subject || ("[V-Track] แจ้งมอบหมายงาน: ใบแจ้งซ่อม #" + taskNo + " - โครงการ " + project);
 
       plainBody = "[V-Track Task Flow System] แจ้งมอบหมายใบงานแจ้งซ่อม\\n" +
         "==================================================\\n" +
@@ -488,7 +488,7 @@ const GAS_DEFAULT_SCRIPT = `function doPost(e) {
 
     // 3. กรณี: ทดสอบการเชื่อมต่อระบบ (Test Notification)
     } else {
-      subject = data.subject || "[Task Flow Test] ทดสอบการเชื่อมต่อระบบแจ้งเตือนทางอีเมล V-Track";
+      subject = data.subject || "[V-Track Test] ทดสอบการเชื่อมต่อระบบแจ้งเตือนทางอีเมล";
       var msg = data.message || "ทดสอบการเชื่อมต่อระบบแจ้งเตือนทางอีเมลสำเร็จ";
       
       plainBody = "[V-Track Task Flow System] ทดสอบการเชื่อมต่อระบบสำเร็จ\\n" +
@@ -521,14 +521,13 @@ const GAS_DEFAULT_SCRIPT = `function doPost(e) {
         '</td></tr></table></body></html>';
     }
 
-    // ส่งอีเมลโดยระบุทั้ง body (Plain text) และ htmlBody (HTML) พร้อม sender name
-    // ซึ่งเป็นหัวใจสำคัญในการผ่านเกณฑ์การตรวจสอบสแปมของเมลองค์กร (เช่น Microsoft 365 Exchange Online)
+    // ส่งอีเมลโดยระบุทั้ง body (Plain text) และ htmlBody (HTML)
+    // ใช้ชื่อผู้ส่งจริงตามธรรมชาติเพื่อป้องกันตัวกรอง Anti-Phishing / Impersonation ของเมลองค์กร
     MailApp.sendEmail({
       to: toEmail,
       subject: subject,
       body: plainBody,
-      htmlBody: htmlBody,
-      name: "V-Track Task Flow"
+      htmlBody: htmlBody
     });
 
     return ContentService.createTextOutput(JSON.stringify({ 
@@ -842,7 +841,7 @@ export default function App() {
         if (settings?.notificationEmail) {
           notifiedAdmin = await triggerEmailNotification(updatedData, 'quotation_uploaded', {
             toEmail: settings.notificationEmail,
-            subject: `[Task Flow] แจ้งเตือน: แนบใบเสนอราคาใหม่ - ใบงาน #${task.taskNo || 'ไม่ระบุ'} (${task.project || 'ไม่ระบุโครงการ'})`,
+            subject: `[V-Track] แจ้งเตือน: แนบใบเสนอราคาใหม่ - ใบงาน #${task.taskNo || 'ไม่ระบุ'} (${task.project || 'ไม่ระบุโครงการ'})`,
             fileName: saveRes.fileName,
             fileUrl: saveRes.fileUrl,
             fileSize: saveRes.fileSize,
@@ -850,7 +849,7 @@ export default function App() {
           }, settings);
         }
       }
-      alert("แนบใบเสนอราคาเรียบร้อยแล้ว สถานะเปลี่ยนเป็น 'อยู่ระหว่างตรวจสอบใบเสนอราคา'" + (notifiedAdmin ? "\n(ส่งอีเมลแจ้งเตือน Task Flow ถึงเจ้าหน้าที่ตรวจสอบแล้ว)" : ""));
+      alert("แนบใบเสนอราคาเรียบร้อยแล้ว สถานะเปลี่ยนเป็น 'อยู่ระหว่างตรวจสอบใบเสนอราคา'" + (notifiedAdmin ? "\n(ส่งอีเมลแจ้งเตือนถึงเจ้าหน้าที่ตรวจสอบแล้ว)" : ""));
     } catch (err) {
       console.error("Upload quote error:", err);
       alert("เกิดข้อผิดพลาดในการแนบใบเสนอราคา: " + err.message);
@@ -943,7 +942,7 @@ export default function App() {
       if (contractorEmail) {
         notifiedContractor = await triggerEmailNotification(updatedData, 'task_order_attached', {
           toEmail: contractorEmail,
-          subject: `[Task Flow] แจ้งมอบหมายงาน: ใบแจ้งซ่อม #${taskNo || 'ไม่ระบุ'} - โครงการ ${task.project || ''} (${task.company || ''})`,
+          subject: `[V-Track] แจ้งมอบหมายงาน: ใบแจ้งซ่อม #${taskNo || 'ไม่ระบุ'} - โครงการ ${task.project || ''} (${task.company || ''})`,
           fileName: saveRes.fileName,
           fileUrl: saveRes.fileUrl,
           fileSize: saveRes.fileSize,
@@ -953,7 +952,7 @@ export default function App() {
         }, settings);
       }
 
-      alert("แนบใบงานและเปิดงานในระบบเรียบร้อยแล้ว!" + (notifiedContractor ? `\n(ส่งอีเมลแจ้งเตือน Task Flow ผู้รับเหมาที่ ${contractorEmail} เรียบร้อยแล้ว)` : ""));
+      alert("แนบใบงานและเปิดงานในระบบเรียบร้อยแล้ว!" + (notifiedContractor ? `\n(ส่งอีเมลแจ้งผู้รับเหมาที่ ${contractorEmail} เรียบร้อยแล้ว)` : ""));
     } catch (err) {
       console.error("Task order upload error:", err);
       alert("เกิดข้อผิดพลาดในการแนบใบงาน: " + err.message);
@@ -3909,10 +3908,10 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
         status: 'รอใบเสนอราคา'
       }, 'test_notification', {
         toEmail: notificationEmail.trim(),
-        subject: '[Task Flow Test] ทดสอบการเชื่อมต่อระบบแจ้งเตือนทางอีเมล V-Track',
+        subject: '[V-Track Test] ทดสอบการเชื่อมต่อระบบแจ้งเตือนทางอีเมล',
         fileName: 'ใบเสนอราคา_ตัวอย่าง.pdf',
         fileSize: 153600,
-        message: 'ยินดีด้วย! ระบบแจ้งเตือนทางอีเมล V-Track Task Flow เชื่อมต่อกับ Google Apps Script สำเร็จเรียบร้อยแล้ว รองรับการส่งอีเมลเข้าเมลองค์กร (เช่น @lh.co.th) ได้อย่างสมบูรณ์'
+        message: 'ยินดีด้วย! ระบบแจ้งเตือนทางอีเมล V-Track เชื่อมต่อกับ Google Apps Script สำเร็จเรียบร้อยแล้ว รองรับการส่งอีเมลเข้าเมลองค์กร (เช่น @lh.co.th) ได้อย่างสมบูรณ์'
       }, { webhookUrl: currentWebhook });
 
       if (ok) {

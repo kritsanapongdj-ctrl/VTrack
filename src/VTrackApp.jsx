@@ -311,76 +311,237 @@ const convertImageToPngDataUrl = (fileOrDataUrl) => {
 
 const GAS_DEFAULT_SCRIPT = `function doPost(e) {
   try {
-    var data = JSON.parse(e.postData.contents);
+    var rawContents = e.postData ? e.postData.contents : "";
+    if (!rawContents && e.parameter && e.parameter.data) {
+      rawContents = e.parameter.data;
+    }
+    var data = {};
+    try {
+      data = typeof rawContents === "string" ? JSON.parse(rawContents) : (rawContents || {});
+    } catch(parseErr) {
+      data = e.parameter || {};
+    }
+
     var toEmail = data.toEmail;
-    var subject = data.subject || ("V-Track แจ้งเตือน: " + (data.taskNo || ''));
-    var event = data.event;
+    var event = data.event || "general";
+    var taskNo = data.taskNo || "-";
+    var project = data.project || "-";
+    var company = data.company || "-";
+    var area = data.area || "-";
+    var aptDate = data.aptDate || "-";
+    var fileName = data.fileName || "-";
+    var fileSizeKb = data.fileSize ? (Math.round(data.fileSize / 1024) + " KB") : "-";
     
+    // เวลาทำรายการแบบไทย (Bangkok Time ICT)
+    var dateStr = Utilities.formatDate(new Date(), "Asia/Bangkok", "dd/MM/yyyy HH:mm 'น.'");
+    var refCode = "TF-" + (taskNo.replace(/[^a-zA-Z0-9]/g, "") || "VTRACK") + "-" + Utilities.formatDate(new Date(), "Asia/Bangkok", "yyMMddHHmm");
+
     if (!toEmail) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "No recipient email" }))
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "No recipient email provided" }))
         .setMimeType(ContentService.MimeType.JSON);
     }
-    
+
+    var subject = data.subject || ("[Task Flow] แจ้งเตือน: ใบงาน #" + taskNo + " (" + project + ")");
+    var plainBody = "";
     var htmlBody = "";
+
+    // 1. กรณี: ผู้รับเหมาแนบใบเสนอราคาใหม่ (Quotation Uploaded - ผ่านเกณฑ์เมลองค์กร)
     if (event === "quotation_uploaded") {
-      htmlBody = '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
-        '<div style="background-color: #003366; color: #ffffff; padding: 16px; border-radius: 8px; text-align: center;">' +
-        '<h2 style="margin: 0; letter-spacing: 1px;">V-TRACK SYSTEM</h2>' +
-        '<p style="margin: 4px 0 0 0; font-size: 13px; color: #C5A059; font-weight: bold;">แจ้งเตือน: ผู้รับเหมาแนบใบเสนอราคาใหม่</p>' +
+      subject = data.subject || ("[Task Flow] แจ้งเตือน: แนบใบเสนอราคาใหม่ - ใบงาน #" + taskNo + " (" + project + ")");
+      
+      plainBody = "[V-Track Task Flow System] แจ้งเตือน: ผู้รับเหมาแนบใบเสนอราคาใหม่\\n" +
+        "==================================================\\n" +
+        "เรียน เจ้าหน้าที่ผู้รับผิดชอบ,\\n\\n" +
+        "ผู้รับเหมาได้ทำการแนบไฟล์ใบเสนอราคาเข้าสู่ระบบ V-Track Task Flow เรียบร้อยแล้ว มีรายละเอียดดังนี้:\\n\\n" +
+        "• เลขที่ใบงาน: " + taskNo + "\\n" +
+        "• โครงการ: " + project + "\\n" +
+        "• บริษัท/ผู้รับเหมา: " + company + "\\n" +
+        "• พื้นที่หน้างาน: " + area + "\\n" +
+        "• วันที่นัดหมาย: " + aptDate + "\\n" +
+        "• ไฟล์ใบเสนอราคา: " + fileName + " (" + fileSizeKb + ")\\n" +
+        "• สถานะปัจจุบัน: อยู่ระหว่างตรวจสอบใบเสนอราคา\\n" +
+        "• วันที่และเวลาส่ง: " + dateStr + "\\n" +
+        "• รหัสอ้างอิง: " + refCode + "\\n\\n" +
+        "กรุณาเข้าสู่ระบบ V-Track เพื่อตรวจสอบเอกสารใบเสนอราคาและดำเนินการในขั้นตอนต่อไป\\n" +
+        "==================================================\\n" +
+        "อีเมลนี้เป็นการแจ้งเตือนอัตโนมัติจากระบบ V-Track Task Flow System (Confidential & Internal Only - Do Not Reply)";
+
+      htmlBody = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+        '</head><body style="margin: 0; padding: 15px; background-color: #f1f5f9; font-family: \'Segoe UI\', Tahoma, Arial, sans-serif; color: #1e293b;">' +
+        '<div style="display:none; font-size:1px; color:#f1f5f9; line-height:1px; max-height:0px; max-width:0px; opacity:0; overflow:hidden;">' +
+        'แจ้งเตือนผู้รับเหมาแนบใบเสนอราคาใหม่ ใบงาน #' + taskNo + ' โครงการ ' + project + ' (' + company + ')' +
         '</div>' +
-        '<div style="padding: 20px 0; color: #334155; line-height: 1.6;">' +
-        '<p>เรียน เจ้าหน้าที่ผู้ดูแลระบบ,</p>' +
-        '<p>ผู้รับเหมาได้ทำการแนบไฟล์ใบเสนอราคาสำหรับงานในระบบเรียบร้อยแล้ว มีรายละเอียดดังนี้:</p>' +
-        '<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">' +
-        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; width: 140px; color: #64748b;">เลขที่ใบงาน:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #003366; font-weight: bold;">' + (data.taskNo || '-') + '</td></tr>' +
-        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">โครงการ:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">' + (data.project || '-') + '</td></tr>' +
-        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">บริษัท/ผู้รับเหมา:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold;">' + (data.company || '-') + '</td></tr>' +
-        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">ชื่อไฟล์ที่แนบ:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">' + (data.fileName || '-') + '</td></tr>' +
-        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">สถานะปัจจุบัน:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #d97706; font-weight: bold;">อยู่ระหว่างตรวจสอบใบเสนอราคา</td></tr>' +
+        '<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 620px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #cbd5e1; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">' +
+        '<tr><td style="background-color: #003366; padding: 22px 24px; text-align: left; border-bottom: 3px solid #C5A059;">' +
+        '<table width="100%" border="0" cellpadding="0" cellspacing="0">' +
+        '<tr><td>' +
+        '<div style="font-size: 11px; font-weight: bold; color: #C5A059; letter-spacing: 1.5px; text-transform: uppercase;">TASK FLOW NOTIFICATION</div>' +
+        '<div style="font-size: 20px; font-weight: bold; color: #ffffff; margin-top: 4px;">V-TRACK OPERATION SYSTEM</div>' +
+        '</td>' +
+        '<td style="text-align: right; vertical-align: middle;">' +
+        '<span style="background-color: rgba(197,160,89,0.25); color: #fde68a; font-size: 11px; font-weight: bold; padding: 6px 12px; border-radius: 20px; border: 1px solid #C5A059;">' +
+        'รอตรวจสอบใบเสนอราคา' +
+        '</span>' +
+        '</td></tr></table>' +
+        '</td></tr>' +
+        '<tr><td style="padding: 24px;">' +
+        '<div style="background-color: #eff6ff; border-left: 4px solid #0284c7; padding: 12px 16px; border-radius: 4px; margin-bottom: 20px;">' +
+        '<strong style="color: #0369a1; font-size: 13px;">📌 ผู้รับเหมาได้แนบใบเสนอราคาใหม่เข้าสู่ระบบเรียบร้อยแล้ว</strong>' +
+        '<div style="font-size: 12px; color: #475569; margin-top: 4px;">กรุณาตรวจสอบเอกสารและพิจารณาอนุมัติเพื่อดำเนินการออกใบงานแจ้งซ่อมต่อไป</div>' +
+        '</div>' +
+        '<div style="font-size: 14px; font-weight: bold; color: #003366; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">' +
+        '📋 ข้อมูลใบงานและเอกสารแนบ (Task Flow Details)' +
+        '</div>' +
+        '<table role="presentation" width="100%" border="0" cellpadding="8" cellspacing="0" style="font-size: 13px; border-collapse: collapse; margin-bottom: 20px;">' +
+        '<tr style="background-color: #f8fafc;"><td style="width: 38%; color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">เลขที่ใบงาน:</td><td style="color: #003366; font-weight: bold; border-bottom: 1px solid #f1f5f9; font-size: 14px;">' + taskNo + '</td></tr>' +
+        '<tr><td style="color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">โครงการ:</td><td style="color: #1e293b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">' + project + '</td></tr>' +
+        '<tr style="background-color: #f8fafc;"><td style="color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">บริษัท/ผู้รับเหมา:</td><td style="color: #1e293b; font-weight: bold; border-bottom: 1px solid #f1f5f9;">' + company + '</td></tr>' +
+        '<tr><td style="color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">พื้นที่หน้างาน:</td><td style="color: #1e293b; border-bottom: 1px solid #f1f5f9;">' + area + '</td></tr>' +
+        '<tr style="background-color: #f8fafc;"><td style="color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">วันนัดหมาย:</td><td style="color: #0369a1; font-weight: 600; border-bottom: 1px solid #f1f5f9;">' + aptDate + '</td></tr>' +
+        '<tr><td style="color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">ชื่อไฟล์ใบเสนอราคา:</td><td style="color: #0f172a; font-weight: bold; border-bottom: 1px solid #f1f5f9;">📎 ' + fileName + ' (' + fileSizeKb + ')</td></tr>' +
+        '<tr style="background-color: #f8fafc;"><td style="color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">สถานะในระบบ:</td><td style="color: #b45309; font-weight: bold; border-bottom: 1px solid #f1f5f9;">อยู่ระหว่างตรวจสอบใบเสนอราคา</td></tr>' +
+        '<tr><td style="color: #64748b; font-weight: 600;">วันและเวลาที่ส่ง:</td><td style="color: #475569;">' + dateStr + '</td></tr>' +
         '</table>' +
-        '<p style="margin-top: 20px; font-size: 13px; color: #475569;">กรุณาเข้าสู่ระบบ V-Track เพื่อตรวจสอบความถูกต้องและดำเนินการอนุมัติหรือออกใบงานต่อไป</p>' +
+        '<div style="text-align: center; margin: 24px 0 16px 0;">' +
+        '<div style="display: inline-block; background-color: #003366; color: #ffffff; padding: 12px 28px; border-radius: 8px; font-weight: bold; font-size: 13px; letter-spacing: 0.5px;">' +
+        'กรุณาเปิดระบบ V-Track เพื่อตรวจสอบเอกสาร' +
         '</div>' +
-        '<div style="text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #e2e8f0; padding-top: 12px;">' +
-        'อีเมลฉบับนี้ส่งโดยระบบอัตโนมัติ V-Track Operation System' +
         '</div>' +
-        '</div>';
+        '</td></tr>' +
+        '<tr><td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 24px; text-align: center; font-size: 11px; color: #64748b; line-height: 1.6;">' +
+        '<div style="font-weight: 600; color: #475569;">รหัสอ้างอิงระบบ Task Flow: ' + refCode + '</div>' +
+        '<div>อีเมลนี้เป็นการแจ้งเตือนอัตโนมัติจากระบบ V-Track Task Flow Management</div>' +
+        '<div style="color: #94a3b8; font-size: 10px; margin-top: 4px;">Security Classification: Confidential / สำหรับเจ้าหน้าที่ผู้เกี่ยวข้องเท่านั้น (Do Not Reply)</div>' +
+        '</td></tr></table>' +
+        '</body></html>';
+
+    // 2. กรณี: เจ้าหน้าที่แนบใบแจ้งซ่อมมอบหมายงาน (Task Order Attached)
     } else if (event === "task_order_attached") {
-      htmlBody = '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
-        '<div style="background-color: #003366; color: #ffffff; padding: 16px; border-radius: 8px; text-align: center;">' +
-        '<h2 style="margin: 0; letter-spacing: 1px;">V-TRACK SYSTEM</h2>' +
-        '<p style="margin: 4px 0 0 0; font-size: 13px; color: #C5A059; font-weight: bold;">แจ้งมอบหมายใบงานแจ้งซ่อม / กำหนดเข้าทำงาน</p>' +
+      var startDate = data.startDate || "-";
+      var endDate = data.endDate || "-";
+      subject = data.subject || ("[Task Flow] แจ้งมอบหมายงาน: ใบแจ้งซ่อม #" + taskNo + " - โครงการ " + project);
+
+      plainBody = "[V-Track Task Flow System] แจ้งมอบหมายใบงานแจ้งซ่อม\\n" +
+        "==================================================\\n" +
+        "เรียน ผู้รับเหมา (" + company + "),\\n\\n" +
+        "ทางเจ้าหน้าที่ได้ทำการออกใบงานแจ้งซ่อมและกำหนดช่วงเวลาปฏิบัติงานเรียบร้อยแล้ว มีรายละเอียดดังนี้:\\n\\n" +
+        "• เลขที่ใบงาน: " + taskNo + "\\n" +
+        "• โครงการ: " + project + "\\n" +
+        "• ช่วงวันเข้าทำงาน: " + startDate + " ถึง " + endDate + "\\n" +
+        "• พื้นที่หน้างาน: " + area + "\\n" +
+        "• เอกสารใบแจ้งซ่อม: " + fileName + " (" + fileSizeKb + ")\\n" +
+        "• วันที่และเวลาออกใบงาน: " + dateStr + "\\n" +
+        "• รหัสอ้างอิง: " + refCode + "\\n\\n" +
+        "ท่านสามารถเข้าสู่ระบบ V-Track เพื่อเปิดดูและดาวน์โหลดไฟล์ใบงานแจ้งซ่อมเก็บไว้ปฏิบัติงานได้ทันที\\n" +
+        "==================================================\\n" +
+        "อีเมลนี้เป็นการแจ้งเตือนอัตโนมัติจากระบบ V-Track Task Flow System (Do Not Reply)";
+
+      htmlBody = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+        '</head><body style="margin: 0; padding: 15px; background-color: #f1f5f9; font-family: \'Segoe UI\', Tahoma, Arial, sans-serif; color: #1e293b;">' +
+        '<div style="display:none; font-size:1px; color:#f1f5f9; line-height:1px; max-height:0px; max-width:0px; opacity:0; overflow:hidden;">' +
+        'แจ้งมอบหมายงานแจ้งซ่อม ใบงาน #' + taskNo + ' โครงการ ' + project + ' สำหรับ ' + company +
         '</div>' +
-        '<div style="padding: 20px 0; color: #334155; line-height: 1.6;">' +
-        '<p>เรียน ผู้รับเหมา (' + (data.company || '') + '),</p>' +
-        '<p>ทางเจ้าหน้าที่ได้ทำการออกใบงานแจ้งซ่อมและกำหนดช่วงเวลาปฏิบัติงานเรียบร้อยแล้ว มีรายละเอียดดังนี้:</p>' +
-        '<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">' +
-        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; width: 140px; color: #64748b;">เลขที่ใบงาน:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #003366; font-weight: bold;">' + (data.taskNo || '-') + '</td></tr>' +
-        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">โครงการ:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">' + (data.project || '-') + '</td></tr>' +
-        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">ช่วงวันเข้าทำงาน:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #059669; font-weight: bold;">' + (data.startDate || '-') + ' ถึง ' + (data.endDate || '-') + '</td></tr>' +
-        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">พื้นที่หน้างาน:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">' + (data.area || '-') + '</td></tr>' +
-        '<tr><td style="padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #64748b;">ไฟล์ใบงานแจ้งซ่อม:</td><td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">' + (data.fileName || '-') + '</td></tr>' +
+        '<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 620px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #cbd5e1; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">' +
+        '<tr><td style="background-color: #003366; padding: 22px 24px; text-align: left; border-bottom: 3px solid #10b981;">' +
+        '<table width="100%" border="0" cellpadding="0" cellspacing="0">' +
+        '<tr><td>' +
+        '<div style="font-size: 11px; font-weight: bold; color: #6ee7b7; letter-spacing: 1.5px; text-transform: uppercase;">TASK FLOW WORK ORDER</div>' +
+        '<div style="font-size: 20px; font-weight: bold; color: #ffffff; margin-top: 4px;">V-TRACK OPERATION SYSTEM</div>' +
+        '</td>' +
+        '<td style="text-align: right; vertical-align: middle;">' +
+        '<span style="background-color: rgba(16,185,129,0.25); color: #a7f3d0; font-size: 11px; font-weight: bold; padding: 6px 12px; border-radius: 20px; border: 1px solid #10b981;">' +
+        'เปิดใบงานแล้ว' +
+        '</span>' +
+        '</td></tr></table>' +
+        '</td></tr>' +
+        '<tr><td style="padding: 24px;">' +
+        '<div style="background-color: #f0fdf4; border-left: 4px solid #10b981; padding: 12px 16px; border-radius: 4px; margin-bottom: 20px;">' +
+        '<strong style="color: #047857; font-size: 13px;">🛠️ มีการมอบหมายใบงานแจ้งซ่อมและกำหนดช่วงวันเข้าทำงาน</strong>' +
+        '<div style="font-size: 12px; color: #475569; margin-top: 4px;">โปรดดาวน์โหลดเอกสารใบงานและเตรียมเข้าปฏิบัติงานตามช่วงเวลาที่กำหนด</div>' +
+        '</div>' +
+        '<div style="font-size: 14px; font-weight: bold; color: #003366; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">' +
+        '📋 ข้อมูลใบงานแจ้งซ่อม (Work Order Details)' +
+        '</div>' +
+        '<table role="presentation" width="100%" border="0" cellpadding="8" cellspacing="0" style="font-size: 13px; border-collapse: collapse; margin-bottom: 20px;">' +
+        '<tr style="background-color: #f8fafc;"><td style="width: 38%; color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">เลขที่ใบงาน:</td><td style="color: #003366; font-weight: bold; border-bottom: 1px solid #f1f5f9; font-size: 14px;">' + taskNo + '</td></tr>' +
+        '<tr><td style="color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">โครงการ:</td><td style="color: #1e293b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">' + project + '</td></tr>' +
+        '<tr style="background-color: #f8fafc;"><td style="color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">ผู้รับเหมา:</td><td style="color: #1e293b; font-weight: bold; border-bottom: 1px solid #f1f5f9;">' + company + '</td></tr>' +
+        '<tr><td style="color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">ช่วงวันเข้าทำงาน:</td><td style="color: #047857; font-weight: bold; border-bottom: 1px solid #f1f5f9; font-size: 14px;">📅 ' + startDate + ' ถึง ' + endDate + '</td></tr>' +
+        '<tr style="background-color: #f8fafc;"><td style="color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">พื้นที่หน้างาน:</td><td style="color: #1e293b; border-bottom: 1px solid #f1f5f9;">' + area + '</td></tr>' +
+        '<tr><td style="color: #64748b; font-weight: 600; border-bottom: 1px solid #f1f5f9;">ไฟล์ใบงานแจ้งซ่อม:</td><td style="color: #0f172a; font-weight: bold; border-bottom: 1px solid #f1f5f9;">📄 ' + fileName + ' (' + fileSizeKb + ')</td></tr>' +
+        '<tr style="background-color: #f8fafc;"><td style="color: #64748b; font-weight: 600;">วันและเวลาที่ออกงาน:</td><td style="color: #475569;">' + dateStr + '</td></tr>' +
         '</table>' +
-        '<p style="margin-top: 20px; font-size: 13px; color: #475569;">ท่านสามารถเข้าสู่ระบบ V-Track เพื่อเปิดดูและดาวน์โหลดไฟล์ใบงานแจ้งซ่อมเก็บไว้ปฏิบัติงานได้ทันที</p>' +
+        '<div style="text-align: center; margin: 24px 0 16px 0;">' +
+        '<div style="display: inline-block; background-color: #003366; color: #ffffff; padding: 12px 28px; border-radius: 8px; font-weight: bold; font-size: 13px;">' +
+        'สามารถเข้าสู่ระบบ V-Track เพื่อเปิดดูและดาวน์โหลดใบงาน' +
         '</div>' +
-        '<div style="text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #e2e8f0; padding-top: 12px;">' +
-        'อีเมลฉบับนี้ส่งโดยระบบอัตโนมัติ V-Track Operation System' +
         '</div>' +
-        '</div>';
+        '</td></tr>' +
+        '<tr><td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 24px; text-align: center; font-size: 11px; color: #64748b; line-height: 1.6;">' +
+        '<div style="font-weight: 600; color: #475569;">รหัสอ้างอิงระบบ Task Flow: ' + refCode + '</div>' +
+        '<div>อีเมลนี้เป็นการแจ้งเตือนอัตโนมัติจากระบบ V-Track Task Flow Management</div>' +
+        '<div style="color: #94a3b8; font-size: 10px; margin-top: 4px;">(Do Not Reply)</div>' +
+        '</td></tr></table>' +
+        '</body></html>';
+
+    // 3. กรณี: ทดสอบการเชื่อมต่อระบบ (Test Notification)
     } else {
-      htmlBody = '<div style="font-family: Arial, sans-serif; padding: 20px;"><h3 style="color:#003366;">V-TRACK SYSTEM</h3><p>' + (data.message || 'ทดสอบการส่งอีเมลแจ้งเตือนสำเร็จ') + '</p></div>';
+      subject = data.subject || "[Task Flow Test] ทดสอบการเชื่อมต่อระบบแจ้งเตือนทางอีเมล V-Track";
+      var msg = data.message || "ทดสอบการเชื่อมต่อระบบแจ้งเตือนทางอีเมลสำเร็จ";
+      
+      plainBody = "[V-Track Task Flow System] ทดสอบการเชื่อมต่อระบบสำเร็จ\\n" +
+        "==================================================\\n" +
+        "ข้อความ: " + msg + "\\n" +
+        "วัน-เวลา: " + dateStr + "\\n" +
+        "รหัสอ้างอิง: " + refCode + "\\n\\n" +
+        "ระบบเชื่อมต่อกับ Google Apps Script เรียบร้อย สามารถรับอีเมลแจ้งเตือนงานได้ทันที\\n" +
+        "==================================================\\n" +
+        "อีเมลทดสอบอัตโนมัติจากระบบ V-Track Task Flow System";
+
+      htmlBody = '<!DOCTYPE html><html><body style="margin: 0; padding: 15px; background-color: #f1f5f9; font-family: \'Segoe UI\', Tahoma, Arial, sans-serif;">' +
+        '<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #cbd5e1;">' +
+        '<tr><td style="background-color: #003366; padding: 20px; color: #ffffff; text-align: center; border-bottom: 3px solid #10b981;">' +
+        '<div style="font-size: 11px; font-weight: bold; color: #6ee7b7; letter-spacing: 1.5px;">TASK FLOW TEST</div>' +
+        '<div style="font-size: 18px; font-weight: bold; margin-top: 4px;">V-TRACK SYSTEM CONNECTED</div>' +
+        '</td></tr>' +
+        '<tr><td style="padding: 24px; color: #1e293b; font-size: 13px; line-height: 1.6;">' +
+        '<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; text-align: center; margin-bottom: 16px;">' +
+        '<div style="font-size: 24px; margin-bottom: 8px;">✅</div>' +
+        '<strong style="color: #15803d; font-size: 15px;">การเชื่อมต่อระบบอีเมลสำเร็จสมบูรณ์!</strong>' +
+        '<p style="color: #475569; margin: 8px 0 0 0; font-size: 12px;">' + msg + '</p>' +
+        '</div>' +
+        '<table width="100%" style="font-size: 12px; color: #64748b; border-top: 1px solid #f1f5f9; padding-top: 12px;">' +
+        '<tr><td>ผู้รับ: <strong>' + toEmail + '</strong></td><td style="text-align: right;">เวลา: ' + dateStr + '</td></tr>' +
+        '</table>' +
+        '</td></tr>' +
+        '<tr><td style="background-color: #f8fafc; padding: 12px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0;">' +
+        'V-Track Task Flow System • Ref: ' + refCode +
+        '</td></tr></table></body></html>';
     }
-    
+
+    // ส่งอีเมลโดยระบุทั้ง body (Plain text) และ htmlBody (HTML) พร้อม sender name
+    // ซึ่งเป็นหัวใจสำคัญในการผ่านเกณฑ์การตรวจสอบสแปมของเมลองค์กร (เช่น Microsoft 365 Exchange Online)
     MailApp.sendEmail({
       to: toEmail,
       subject: subject,
-      htmlBody: htmlBody
+      body: plainBody,
+      htmlBody: htmlBody,
+      name: "V-Track Task Flow"
     });
-    
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Email sent to " + toEmail }))
-      .setMimeType(ContentService.MimeType.JSON);
+
+    return ContentService.createTextOutput(JSON.stringify({ 
+      status: "success", 
+      message: "Email sent to " + toEmail,
+      ref: refCode
+    })).setMimeType(ContentService.MimeType.JSON);
+
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ 
+      status: "error", 
+      message: err.toString() 
+    })).setMimeType(ContentService.MimeType.JSON);
   }
 }`;
 
@@ -399,6 +560,9 @@ const triggerEmailNotification = async (task, eventType, extraData = {}, current
       status: task?.status || '',
       area: task?.area || '',
       cost: task?.cost || '',
+      aptDate: task?.aptDate || task?.startDate || '',
+      startDate: task?.startDate || '',
+      endDate: task?.endDate || '',
       details: task?.details || '',
       ...extraData,
       timestamp: new Date().toISOString()
@@ -406,7 +570,7 @@ const triggerEmailNotification = async (task, eventType, extraData = {}, current
     await fetch(webhookUrl, {
       method: 'POST',
       mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     });
     console.log('Email notification dispatched via webhook:', eventType, extraData.toEmail);
@@ -678,7 +842,7 @@ export default function App() {
         if (settings?.notificationEmail) {
           notifiedAdmin = await triggerEmailNotification(updatedData, 'quotation_uploaded', {
             toEmail: settings.notificationEmail,
-            subject: `[V-Track แจ้งเตือน] ผู้รับเหมาแนบใบเสนอราคา - ใบงาน #${task.taskNo} (${task.project})`,
+            subject: `[Task Flow] แจ้งเตือน: แนบใบเสนอราคาใหม่ - ใบงาน #${task.taskNo || 'ไม่ระบุ'} (${task.project || 'ไม่ระบุโครงการ'})`,
             fileName: saveRes.fileName,
             fileUrl: saveRes.fileUrl,
             fileSize: saveRes.fileSize,
@@ -686,7 +850,7 @@ export default function App() {
           }, settings);
         }
       }
-      alert("แนบใบเสนอราคาเรียบร้อยแล้ว สถานะเปลี่ยนเป็น 'อยู่ระหว่างตรวจสอบใบเสนอราคา'" + (notifiedAdmin ? "\n(ส่งอีเมลแจ้งเตือนเจ้าหน้าที่ตรวจสอบแล้ว)" : ""));
+      alert("แนบใบเสนอราคาเรียบร้อยแล้ว สถานะเปลี่ยนเป็น 'อยู่ระหว่างตรวจสอบใบเสนอราคา'" + (notifiedAdmin ? "\n(ส่งอีเมลแจ้งเตือน Task Flow ถึงเจ้าหน้าที่ตรวจสอบแล้ว)" : ""));
     } catch (err) {
       console.error("Upload quote error:", err);
       alert("เกิดข้อผิดพลาดในการแนบใบเสนอราคา: " + err.message);
@@ -779,7 +943,7 @@ export default function App() {
       if (contractorEmail) {
         notifiedContractor = await triggerEmailNotification(updatedData, 'task_order_attached', {
           toEmail: contractorEmail,
-          subject: `[V-Track แจ้งงาน] มอบหมายใบงานแจ้งซ่อม #${taskNo} - โครงการ ${task.project}`,
+          subject: `[Task Flow] แจ้งมอบหมายงาน: ใบแจ้งซ่อม #${taskNo || 'ไม่ระบุ'} - โครงการ ${task.project || ''} (${task.company || ''})`,
           fileName: saveRes.fileName,
           fileUrl: saveRes.fileUrl,
           fileSize: saveRes.fileSize,
@@ -789,7 +953,7 @@ export default function App() {
         }, settings);
       }
 
-      alert("แนบใบงานและเปิดงานในระบบเรียบร้อยแล้ว!" + (notifiedContractor ? `\n(ส่งอีเมลแจ้งผู้รับเหมาที่ ${contractorEmail} เรียบร้อยแล้ว)` : ""));
+      alert("แนบใบงานและเปิดงานในระบบเรียบร้อยแล้ว!" + (notifiedContractor ? `\n(ส่งอีเมลแจ้งเตือน Task Flow ผู้รับเหมาที่ ${contractorEmail} เรียบร้อยแล้ว)` : ""));
     } catch (err) {
       console.error("Task order upload error:", err);
       alert("เกิดข้อผิดพลาดในการแนบใบงาน: " + err.message);
@@ -3734,21 +3898,25 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
       return;
     }
     setIsTestingEmail(true);
-    setTestEmailStatus('กำลังส่งอีเมลทดสอบ...');
+    setTestEmailStatus('กำลังส่งอีเมลทดสอบระบบ Task Flow...');
     try {
       const ok = await triggerEmailNotification({
-        taskNo: 'TEST-001',
-        project: 'ทดสอบระบบแจ้งเตือน V-Track',
-        company: 'บริษัท ทดสอบ จำกัด',
-        status: 'ทดสอบการส่งอีเมล'
+        taskNo: 'REQ-DEMO-01',
+        project: 'มัณฑนา มอเตอร์เวย์ - พระราม 9',
+        company: 'บจก. กรีนดิส เอ็นจิเนียริ่ง',
+        area: 'งานระบบระบายน้ำและบ่อสูบ',
+        aptDate: '15/10/2026',
+        status: 'รอใบเสนอราคา'
       }, 'test_notification', {
         toEmail: notificationEmail.trim(),
-        subject: '[V-Track Test] ทดสอบการเชื่อมต่อระบบแจ้งเตือนทางอีเมล',
-        message: 'ยินดีด้วย! ระบบแจ้งเตือนทางอีเมลของ V-Track เชื่อมต่อกับ Google Apps Script สำเร็จเรียบร้อยแล้ว สามารถใช้งานส่งอีเมลแจ้งเตือนอัตโนมัติได้ทันที'
+        subject: '[Task Flow Test] ทดสอบการเชื่อมต่อระบบแจ้งเตือนทางอีเมล V-Track',
+        fileName: 'ใบเสนอราคา_ตัวอย่าง.pdf',
+        fileSize: 153600,
+        message: 'ยินดีด้วย! ระบบแจ้งเตือนทางอีเมล V-Track Task Flow เชื่อมต่อกับ Google Apps Script สำเร็จเรียบร้อยแล้ว รองรับการส่งอีเมลเข้าเมลองค์กร (เช่น @lh.co.th) ได้อย่างสมบูรณ์'
       }, { webhookUrl: currentWebhook });
 
       if (ok) {
-        setTestEmailStatus('ส่งคำขอทดสอบสำเร็จ! กรุณาตรวจสอบอีเมลที่ ' + notificationEmail.trim());
+        setTestEmailStatus('ส่งคำขอทดสอบสำเร็จ! กรุณาตรวจสอบ Inbox/กล่องข้อความที่ ' + notificationEmail.trim());
       } else {
         setTestEmailStatus('เกิดข้อผิดพลาดในการเชื่อมต่อ Webhook');
       }
@@ -4192,8 +4360,8 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
                   GAS
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-800 text-base">วิธีติดตั้ง Google Apps Script (ส่งอีเมลฟรี 100%)</h3>
-                  <p className="text-[10px] text-gray-400">ทำตาม 4 ขั้นตอนง่ายๆ ใช้เวลาไม่เกิน 1 นาที</p>
+                  <h3 className="font-bold text-gray-800 text-base">วิธีติดตั้ง Google Apps Script (ระบบ Task Flow ทะลุการบล็อคเมลองค์กร)</h3>
+                  <p className="text-[10px] text-gray-400">ส่งอีเมลฟรี 100% ผ่านเกณฑ์ตรวจจับสแปมของเมลองค์กร (เช่น Microsoft 365, Exchange, Google Workspace)</p>
                 </div>
               </div>
               <button onClick={() => setShowGasModal(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400"><X size={18}/></button>

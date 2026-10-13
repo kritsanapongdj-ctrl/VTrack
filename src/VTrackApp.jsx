@@ -803,16 +803,21 @@ export default function App() {
       }
       // เงื่อนไข: หากสถานะเดิมคือ 'รอใบเสนอราคา' (หรือยังไม่มีใบเสนอราคามาก่อน) ส่งอีเมลแจ้งเตือนเจ้าหน้าที่
       let notifiedAdmin = false;
-      if (prevStatus === 'รอใบเสนอราคา' || !task.quoteFileUrl) {
+      const prevStatus = task?.status || '';
+      if (prevStatus === 'รอใบเสนอราคา' || !task?.quoteFileUrl) {
         if (settings?.notificationEmail) {
-          notifiedAdmin = await triggerEmailNotification(updatedData, 'quotation_uploaded', {
-            toEmail: settings.notificationEmail,
-            subject: `[V-Track] แจ้งเตือน: แนบใบเสนอราคาใหม่ - ใบงาน #${task.taskNo || 'ไม่ระบุ'} (${task.project || 'ไม่ระบุโครงการ'})`,
-            fileName: saveRes.fileName,
-            fileUrl: saveRes.fileUrl,
-            fileSize: saveRes.fileSize,
-            recipientType: 'admin'
-          }, settings);
+          try {
+            notifiedAdmin = await triggerEmailNotification(updatedData, 'quotation_uploaded', {
+              toEmail: settings.notificationEmail,
+              subject: `แจ้งส่งเอกสารใบเสนอราคา: ใบงาน #${task.taskNo || 'ไม่ระบุ'} โครงการ ${task.project || 'ไม่ระบุโครงการ'}`,
+              fileName: saveRes.fileName,
+              fileUrl: saveRes.fileUrl,
+              fileSize: saveRes.fileSize,
+              recipientType: 'admin'
+            }, settings);
+          } catch (mailErr) {
+            console.warn('Notification email error (safe ignore):', mailErr);
+          }
         }
       }
       alert("แนบใบเสนอราคาเรียบร้อยแล้ว สถานะเปลี่ยนเป็น 'อยู่ระหว่างตรวจสอบใบเสนอราคา'" + (notifiedAdmin ? "\n(ส่งอีเมลแจ้งเตือนถึงเจ้าหน้าที่ตรวจสอบแล้ว)" : ""));
@@ -903,19 +908,23 @@ export default function App() {
         }));
       }
       // ฟังก์ชันที่ 2: ส่งอีเมลแจ้งเตือนไปยังผู้รับเหมาตามอีเมลที่บันทึกไว้ในตั้งค่า (ผูกกับชื่อบริษัท)
-      const contractorEmail = settings?.companyEmails?.[task.company];
+            const contractorEmail = settings?.companyEmails?.[task.company];
       let notifiedContractor = false;
       if (contractorEmail) {
-        notifiedContractor = await triggerEmailNotification(updatedData, 'task_order_attached', {
-          toEmail: contractorEmail,
-          subject: `[V-Track] แจ้งมอบหมายงาน: ใบแจ้งซ่อม #${taskNo || 'ไม่ระบุ'} - โครงการ ${task.project || ''} (${task.company || ''})`,
-          fileName: saveRes.fileName,
-          fileUrl: saveRes.fileUrl,
-          fileSize: saveRes.fileSize,
-          startDate,
-          endDate,
-          recipientType: 'contractor'
-        }, settings);
+        try {
+          notifiedContractor = await triggerEmailNotification(updatedData, 'task_order_attached', {
+            toEmail: contractorEmail,
+            subject: `แจ้งมอบหมายใบงานแจ้งซ่อม: ใบงาน #${taskNo || task.taskNo || 'ไม่ระบุ'} โครงการ ${task.project || ''} (${task.company || ''})`,
+            fileName: saveRes.fileName,
+            fileUrl: saveRes.fileUrl,
+            fileSize: saveRes.fileSize,
+            startDate,
+            endDate,
+            recipientType: 'contractor'
+          }, settings);
+        } catch (mailErr) {
+          console.warn("Contractor email trigger error (safe ignore):", mailErr);
+        }
       }
 
       alert("แนบใบงานและเปิดงานในระบบเรียบร้อยแล้ว!" + (notifiedContractor ? `\n(ส่งอีเมลแจ้งผู้รับเหมาที่ ${contractorEmail} เรียบร้อยแล้ว)` : ""));

@@ -40,14 +40,14 @@ const GOOGLE_SHEETS_WEBHOOK_URL = '';
 const AREAS = ['รังสิต', 'ร่มเกล้า', 'พระราม 9', 'รามอินทรา'];
 
 const STATUSES = [
-  { id: 1, name: 'รอใบเสนอราคา', color: '#94A3B8', bgColor: '#F1F5F9' },
-  { id: 2, name: 'อยู่ระหว่างตรวจสอบใบเสนอราคา', color: '#F59E0B', bgColor: '#FEF3C7' },
-  { id: 3, name: 'อนุมัติใบเสนอราคาแล้ว', color: '#6366F1', bgColor: '#EEF2FF' },
-  { id: 4, name: 'เปิดใบงานในระบบแล้ว', color: '#3B82F6', bgColor: '#DBEAFE' },
-  { id: 5, name: 'จบงานและรอรับเอกสารวางบิล', color: '#A855F7', bgColor: '#F3E8FF' },
-  { id: 6, name: 'ได้รับเอกสารวางบิลแล้ว', color: '#EC4899', bgColor: '#FCE7F3' },
-  { id: 7, name: 'ส่งเอกสารเบิกจ่ายแล้ว', color: '#10B981', bgColor: '#D1FAE5' },
-  { id: 8, name: 'ยกเลิก', color: '#EF4444', bgColor: '#FEE2E2' }
+  { id: 1, name: 'รอใบเสนอราคา', color: '#64748B', bgColor: '#F1F5F9' },
+  { id: 2, name: 'อยู่ระหว่างตรวจสอบใบเสนอราคา', color: '#B45309', bgColor: '#FEF3C7' },
+  { id: 3, name: 'อนุมัติใบเสนอราคาแล้ว', color: '#4338CA', bgColor: '#EEF2FF' },
+  { id: 4, name: 'เปิดใบงานในระบบแล้ว', color: '#1D4ED8', bgColor: '#DBEAFE' },
+  { id: 5, name: 'จบงานและรอรับเอกสารวางบิล', color: '#7E22CE', bgColor: '#F3E8FF' },
+  { id: 6, name: 'ได้รับเอกสารวางบิลแล้ว', color: '#BE123C', bgColor: '#FFE4E6' },
+  { id: 7, name: 'ส่งเอกสารเบิกจ่ายแล้ว', color: '#047857', bgColor: '#D1FAE5' },
+  { id: 8, name: 'ยกเลิก', color: '#B91C1C', bgColor: '#FEE2E2' }
 ];
 
 const generateRefId = () => {
@@ -1106,27 +1106,129 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-[#FDFDFD] text-gray-900 font-sans overflow-hidden">
-      <aside className={`hidden md:flex ${isSidebarOpen ? 'w-64' : 'w-20'} flex-col bg-[#003366] text-white transition-all duration-300 relative overflow-hidden`}>
-        <div className="h-20 flex items-center justify-between px-6 border-b border-white/5">
-          {isSidebarOpen && <span className="font-bold text-xl tracking-tighter">V<span className="text-[#C5A059]">-TRACK</span></span>}
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-white/10 rounded-xl"><Menu size={20}/></button>
+    <div className="flex flex-col md:flex-row h-screen bg-[#F8F6F0] text-[#1E252B] font-sans overflow-hidden relative selection:bg-[#C5A059]/20 selection:text-[#002447]">
+      {/* Background Architectural Ambient SVG Curves (Flowing dynamic ribbons + drafting grid) */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden opacity-40">
+        <div className="absolute inset-0 bg-drafting-grid opacity-25"></div>
+        <svg 
+          className="absolute -top-32 -left-32 w-[140%] h-[140%] pointer-events-none opacity-60" 
+          viewBox="0 0 1600 1200" 
+          fill="none" 
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          {/* Subtle flowing dynamic ribbons referencing Land & Houses architectural contours */}
+          <path 
+            d="M -100 250 C 350 120, 650 480, 1100 280 C 1450 120, 1600 450, 1800 350" 
+            stroke="#C5A059" 
+            strokeWidth="1.2" 
+            strokeOpacity="0.4"
+            className="animate-wave-flow" 
+            fill="none" 
+          />
+          <path 
+            d="M -100 310 C 380 180, 680 540, 1130 340 C 1480 180, 1630 510, 1800 410" 
+            stroke="#002447" 
+            strokeWidth="0.8" 
+            strokeOpacity="0.18" 
+            strokeDasharray="8 6"
+            fill="none" 
+          />
+          <path 
+            d="M -100 850 C 400 950, 750 650, 1200 800 C 1500 920, 1650 750, 1800 820" 
+            stroke="#C5A059" 
+            strokeWidth="1.5" 
+            strokeOpacity="0.3" 
+            strokeDasharray="16 12"
+            fill="none" 
+          />
+          {/* 80s Architectural Drafting Crosshairs & Registration Marks */}
+          <circle cx="280" cy="180" r="14" stroke="#C5A059" strokeWidth="0.75" strokeOpacity="0.35" />
+          <line x1="280" y1="160" x2="280" y2="200" stroke="#C5A059" strokeWidth="0.75" strokeOpacity="0.35" />
+          <line x1="260" y1="180" x2="300" y2="180" stroke="#C5A059" strokeWidth="0.75" strokeOpacity="0.35" />
+
+          <circle cx="1320" cy="940" r="14" stroke="#002447" strokeWidth="0.75" strokeOpacity="0.25" />
+          <line x1="1320" y1="920" x2="1320" y2="960" stroke="#002447" strokeWidth="0.75" strokeOpacity="0.25" />
+          <line x1="1300" y1="940" x2="1340" y2="940" stroke="#002447" strokeWidth="0.75" strokeOpacity="0.25" />
+        </svg>
+      </div>
+
+      <aside className={`hidden md:flex ${isSidebarOpen ? 'w-68' : 'w-20'} flex-col bg-[#002447] text-white transition-all duration-300 relative z-20 overflow-hidden border-r border-[#C5A059]/20 shadow-[4px_0_24px_rgba(0,36,71,0.15)]`}>
+        {/* Architectural Subtle Grid Overlay inside Sidebar */}
+        <div className="absolute inset-0 bg-drafting-grid opacity-10 pointer-events-none"></div>
+        
+        {/* Brand Section */}
+        <div className="h-20 flex items-center justify-between px-6 border-b border-[#C5A059]/15 relative z-10">
+          {isSidebarOpen ? (
+            <div className="flex flex-col">
+              <span className="font-serif-luxury font-bold text-2xl tracking-wider text-white">
+                V<span className="text-[#C5A059]">-TRACK</span>
+              </span>
+              <span className="text-[8px] tracking-[0.2em] font-mono-tech text-[#C5A059]/80 uppercase">
+                LAND & HOUSES • ENG.
+              </span>
+            </div>
+          ) : (
+            <span className="font-serif-luxury font-bold text-xl text-[#C5A059] mx-auto">VT</span>
+          )}
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+            className="p-2 hover:bg-[#C5A059]/10 text-white/70 hover:text-[#C5A059] rounded-lg transition-colors border border-transparent hover:border-[#C5A059]/30"
+          >
+            <Menu size={18}/>
+          </button>
         </div>
-        <nav className="flex-1 p-4 space-y-2">
+
+        {/* Navigation */}
+        <nav className="flex-1 p-4 space-y-2 relative z-10">
           <NavItem id="dashboard" icon={LayoutDashboard} label="แดชบอร์ด" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
           <NavItem id="add" icon={PlusCircle} label="เพิ่มใบงาน" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
           <NavItem id="management" icon={FileText} label="จัดการข้อมูล" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
           <NavItem id="calendar" icon={CalendarIcon} label="ปฏิทินงาน" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
-          <div className="pt-4 border-t border-white/5"><NavItem id="settings" icon={Settings} label="ตั้งค่าระบบ" active={activeTab} set={setActiveTab} open={isSidebarOpen}/></div>
+          <div className="pt-4 mt-2 border-t border-[#C5A059]/15">
+            <NavItem id="settings" icon={Settings} label="ตั้งค่าระบบ" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
+          </div>
         </nav>
+
+        {/* 80s Architectural Edition Stamp in footer */}
+        {isSidebarOpen && (
+          <div className="p-4 border-t border-[#C5A059]/15 bg-[#001c37] relative z-10 text-[9px] font-mono-tech text-white/50 flex flex-col gap-0.5">
+            <div className="flex items-center justify-between text-[#C5A059]/80 font-semibold">
+              <span>LH ARCHITECTURE</span>
+              <span>EST. 1983</span>
+            </div>
+            <span>SYS_VER: 2.8.4 [PROD]</span>
+          </div>
+        )}
       </aside>
 
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
-        <header className="h-16 md:h-20 bg-white/90 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-6 sticky top-0 z-20">
-          <h2 className="text-lg font-bold text-[#003366]">ระบบจัดการใบงาน V-TRACK</h2>
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative z-10">
+        <header className="h-16 md:h-20 bg-[#F8F6F0]/90 backdrop-blur-md border-b border-[#E2DDD1] flex items-center justify-between px-6 md:px-8 sticky top-0 z-30">
           <div className="flex items-center space-x-3">
-            {isUnlocked && <button onClick={() => setIsUnlocked(false)} className="text-[10px] bg-red-50 text-red-500 px-2 py-1 rounded-md border border-red-100 font-bold">LOCK</button>}
-            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-[#003366]"><User size={18}/></div>
+            <div className="hidden sm:flex w-2.5 h-2.5 rounded-full bg-[#C5A059] shadow-[0_0_8px_#C5A059] animate-pulse"></div>
+            <div>
+              <h2 className="text-base md:text-xl font-serif-luxury font-bold text-[#002447] tracking-tight">
+                ระบบจัดการใบงาน V-TRACK
+              </h2>
+              <div className="hidden md:flex items-center space-x-2">
+                <span className="tech-stamp">PROJECT TRACKING & QUALITY VERIFICATION</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center space-x-3">
+            {isUnlocked && (
+              <button 
+                onClick={() => setIsUnlocked(false)} 
+                className="text-[10px] bg-red-50 text-red-600 px-2.5 py-1 rounded-[4px] border border-red-200 font-mono-tech font-bold hover:bg-red-100 transition-colors"
+              >
+                [ 🔒 LOCK ]
+              </button>
+            )}
+            <div className="flex items-center space-x-2.5 pl-2 border-l border-[#E2DDD1]">
+              <div className="w-8 h-8 rounded-[8px] bg-white border border-[#C5A059]/50 flex items-center justify-center text-[#002447] shadow-2xs">
+                <User size={16}/>
+              </div>
+              <span className="hidden sm:inline text-xs font-semibold text-[#002447]">LH Engineer</span>
+            </div>
           </div>
         </header>
 
@@ -1279,17 +1381,34 @@ export default function App() {
 function NavItem({ id, icon: Icon, label, active, set, open }) {
   const isAct = active === id;
   return (
-    <button onClick={() => set(id)} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-2xl transition-all duration-300 ${isAct ? 'bg-[#C5A059] text-white shadow-lg' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}>
-      <Icon size={20} strokeWidth={isAct ? 2.5 : 2} />
-      {open && <span className="text-sm font-semibold">{label}</span>}
+    <button 
+      onClick={() => set(id)} 
+      className={`w-full flex items-center space-x-3 px-3.5 py-3 transition-all duration-300 relative select-none ${
+        isAct 
+          ? 'bg-gradient-to-r from-[#C5A059] to-[#DFBE77] text-[#002447] font-bold shadow-md shadow-[#C5A059]/20 rounded-r-2xl rounded-l-md translate-x-1' 
+          : 'text-white/70 hover:bg-white/5 hover:text-white rounded-lg'
+      }`}
+    >
+      {isAct && (
+        <span className="absolute left-0 top-2 bottom-2 w-1 bg-[#002447] rounded-r-sm"></span>
+      )}
+      <Icon size={18} strokeWidth={isAct ? 2.5 : 2} className={isAct ? 'text-[#002447]' : 'text-[#C5A059]/90'} />
+      {open && <span className="text-xs font-semibold tracking-wide">{label}</span>}
     </button>
   );
 }
 
 function MobileNavItem({ id, icon: Icon, label, active, set }) {
+  const isAct = active === id;
   return (
-    <button onClick={() => set(id)} className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${active === id ? 'text-[#C5A059]' : 'text-gray-400'}`}>
-      <Icon size={20} strokeWidth={active === id ? 2.5 : 2} />
+    <button 
+      onClick={() => set(id)} 
+      className={`flex flex-col items-center justify-center flex-1 h-full transition-colors relative ${
+        isAct ? 'text-[#002447]' : 'text-gray-400'
+      }`}
+    >
+      {isAct && <div className="absolute top-0 w-8 h-1 bg-[#C5A059] rounded-b-full"></div>}
+      <Icon size={18} strokeWidth={isAct ? 2.5 : 2} className={isAct ? 'text-[#C5A059]' : ''} />
       <span className="text-[10px] mt-1 font-bold">{label}</span>
     </button>
   );
@@ -1300,13 +1419,28 @@ function PinLock({ onUnlock }) {
   const sub = (e) => { e.preventDefault(); if (v === '1312') onUnlock(); else setV(''); };
   return (
     <div className="flex flex-col items-center pt-12 animate-in fade-in zoom-in duration-500">
-      <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl border border-gray-100 w-full max-w-xs text-center">
-        <div className="w-16 h-16 bg-[#003366]/5 rounded-full flex items-center justify-center mx-auto mb-6 text-[#003366]"><Settings size={28}/></div>
-        <h3 className="font-bold text-gray-800 text-xl mb-2">Admin Login</h3>
-        <p className="text-xs text-gray-400 mb-8 font-medium">กรุณาระบุรหัสผ่านเพื่อเข้าใช้งานส่วนนี้</p>
-        <form onSubmit={sub}>
-          <input type="password" value={v} onChange={e=>setV(e.target.value)} maxLength={4} placeholder="••••" className="w-full text-center text-3xl tracking-[0.5em] p-4 bg-gray-50 rounded-2xl mb-8 border-none focus:ring-2 focus:ring-[#C5A059]" autoFocus />
-          <button type="submit" className="w-full bg-[#003366] text-white py-4 rounded-2xl font-bold active:scale-95 transition-transform">ยืนยันรหัสผ่าน</button>
+      <div className="asym-card p-8 border border-[#E2DDD1] w-full max-w-xs text-center shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#002447] via-[#C5A059] to-[#002447]"></div>
+        <div className="w-12 h-12 mx-auto rounded-full bg-[#FAF8F5] border border-[#C5A059]/40 flex items-center justify-center text-[#002447] mb-3 shadow-inner">
+          <Lock size={20} className="text-[#C5A059]" />
+        </div>
+        <h3 className="font-serif-luxury font-bold text-lg text-[#002447]">ระบบรักษาความปลอดภัย</h3>
+        <p className="text-[10px] text-gray-500 font-mono-tech mt-1 tracking-wider uppercase">ARCHITECTURAL ACCESS CONTROL</p>
+        <form onSubmit={sub} className="mt-5 space-y-4">
+          <input 
+            type="password" 
+            placeholder="• • • •" 
+            className="w-full text-center tracking-[0.5em] text-xl font-bold py-3 bg-[#FAF8F5] border border-[#E2DDD1] rounded-xl focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-[#002447]" 
+            value={v} 
+            onChange={e => setV(e.target.value)} 
+            autoFocus 
+          />
+          <button 
+            type="submit" 
+            className="w-full py-3 bg-gradient-to-r from-[#002447] to-[#003366] text-white rounded-xl text-xs font-bold tracking-wider hover:opacity-95 shadow-md flex items-center justify-center space-x-1"
+          >
+            <span>ปลดล็อคระบบ</span>
+          </button>
         </form>
       </div>
     </div>
@@ -3156,123 +3290,224 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
     return `${s.color} ${start}% ${cumulativePercent}%`;
   }).join(', ');
   
-  const pieStyle = filteredTasks.length > 0 ? { background: `conic-gradient(${conicStops})` } : { background: '#F8F9FA' };
+  const pieStyle = filteredTasks.length > 0 ? { background: `conic-gradient(${conicStops})` } : { background: '#F0ECE1' };
+
+  const selectedMonthFormatted = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(selectedMonth));
+    } catch {
+      return selectedMonth;
+    }
+  }, [selectedMonth]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700">
-      <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-          <div className="col-span-2 md:col-span-1 space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 flex items-center"><CalendarDays size={12} className="mr-1"/> ประจำเดือน</label>
-            <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold">
-              {availableMonths.map(m => <option key={m} value={m}>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}</option>)}
-            </select>
-          </div>
+      {/* 80s Architectural Drafting Filter Bar */}
+      <div className="asym-card p-6 md:p-7 border border-[#E2DDD1] shadow-sm relative overflow-hidden bg-white">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-drafting-grid opacity-20 pointer-events-none"></div>
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-1">
-             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 flex items-center"><Filter size={12} className="mr-1"/> กรองตามโครงการ</label>
-             <select value={filterProj} onChange={e => setFilterProj(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold">
-               <option value="">ทุกโครงการ</option>
-               {settings.projects.map(p => <option key={p} value={p}>{p}</option>)}
-             </select>
+            <div className="flex items-center space-x-2">
+              <span className="tech-stamp">PROJECT DISPATCH & OPERATIONS OVERVIEW</span>
+            </div>
+            <h3 className="font-serif-luxury text-2xl md:text-3xl font-bold text-[#002447] tracking-tight">
+              ภาพรวมการดำเนินงาน V-TRACK
+            </h3>
+            <p className="text-xs text-[#8C7B63] font-medium flex items-center gap-1.5">
+              <span>งวดข้อมูล:</span>
+              <span className="font-bold text-[#002447]">{selectedMonthFormatted}</span>
+              <span className="text-gray-300">•</span>
+              <span>พบทั้งหมด <strong className="text-[#C5A059] font-mono-tech">{filteredTasks.length}</strong> รายการ</span>
+            </p>
           </div>
-          <div className="space-y-1">
-             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 flex items-center"><Filter size={12} className="mr-1"/> กรองตามร้านค้า</label>
-             <select value={filterComp} onChange={e => setFilterComp(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-sm font-semibold">
-               <option value="">ทุกร้านค้า</option>
-               {settings.companies.map(c => <option key={c} value={c}>{c}</option>)}
-             </select>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 shrink-0 lg:w-[620px]">
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
+                <CalendarDays size={12} className="mr-1 text-[#C5A059]"/> [ 01. PERIOD ]
+              </label>
+              <select 
+                value={selectedMonth} 
+                onChange={e => setSelectedMonth(e.target.value)} 
+                className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447] transition-all"
+              >
+                {availableMonths.map(m => (
+                  <option key={m} value={m}>
+                    {new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
+                <Filter size={12} className="mr-1 text-[#C5A059]"/> [ 02. ESTATE ]
+              </label>
+              <select 
+                value={filterProj} 
+                onChange={e => setFilterProj(e.target.value)} 
+                className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447] transition-all"
+              >
+                <option value="">ทุกโครงการ</option>
+                {settings.projects.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
+                <Filter size={12} className="mr-1 text-[#C5A059]"/> [ 03. VENDOR ]
+              </label>
+              <select 
+                value={filterComp} 
+                onChange={e => setFilterComp(e.target.value)} 
+                className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447] transition-all"
+              >
+                <option value="">ทุกร้านค้า</option>
+                {settings.companies.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col">
-          <h4 className="w-full text-sm font-bold text-gray-400 mb-8 uppercase tracking-widest text-center">สัดส่วนสถานะงาน</h4>
+      {/* Asymmetric 5:7 Layout Split (Status Spec Matrix vs Task Stream) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column (5/12 cols): Architectural Status Specification Matrix */}
+        <div className="lg:col-span-5 asym-card p-6 md:p-8 border border-[#E2DDD1] shadow-sm flex flex-col bg-white relative overflow-hidden">
+          {/* Subtle Dynamic Ribbon Curve in Card Background */}
+          <svg className="absolute -top-10 -right-10 w-60 h-60 pointer-events-none opacity-20" viewBox="0 0 200 200">
+            <path d="M 0,100 C 50,20 150,180 200,100" stroke="#C5A059" strokeWidth="1.5" fill="none" className="animate-wave-flow" />
+          </svg>
+
+          <div className="flex items-center justify-between pb-4 border-b border-[#E2DDD1]/80 mb-6 relative z-10">
+            <div>
+              <h4 className="font-serif-luxury font-bold text-lg md:text-xl text-[#002447]">สัดส่วนสถานะงาน</h4>
+              <p className="text-[9px] font-mono-tech text-[#8C7B63] tracking-widest uppercase">DISPATCH METRICS & RATIOS</p>
+            </div>
+            <span className="text-[10px] font-mono-tech text-[#002447] bg-[#FAF8F5] border border-[#E2DDD1] px-2.5 py-1 rounded-md font-bold">
+              ⊕ {filteredTasks.length} TASKS
+            </span>
+          </div>
           
-          <div className="relative w-48 h-48 mb-8 mx-auto rounded-full shadow-md flex items-center justify-center transition-all duration-500" style={pieStyle}>
-            <div className="w-32 h-32 bg-white rounded-full flex flex-col items-center justify-center shadow-inner z-10">
-              <span className="text-4xl font-bold text-[#003366]">{filteredTasks.length}</span>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">ใบงานทั้งหมด</span>
+          {/* Donut Chart with Brass Ring Rim */}
+          <div className="relative my-4 mx-auto flex items-center justify-center z-10">
+            <div className="p-3 rounded-full border border-[#C5A059]/40 bg-[#FAF8F5] shadow-inner">
+              <div 
+                className="relative w-44 h-44 rounded-full shadow-md flex items-center justify-center transition-all duration-700" 
+                style={pieStyle}
+              >
+                <div className="w-28 h-28 bg-white rounded-full flex flex-col items-center justify-center shadow-sm border border-[#E2DDD1]/80 z-10">
+                  <span className="text-3xl font-serif-luxury font-bold text-[#002447]">{filteredTasks.length}</span>
+                  <span className="text-[9px] font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider mt-0.5">ใบงานรวม</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="w-full space-y-3 mt-2">
-             <p className="text-[10px] font-bold text-gray-300 uppercase mb-3 tracking-tighter">ความหมายของสีสถานะ</p>
-            {stats.map(s => (
-              <div key={s.id} className={`flex items-center justify-between text-[11px] font-medium transition-opacity ${s.count > 0 ? 'text-gray-600' : 'text-gray-300 opacity-50'}`}>
-                <div className="flex items-center space-x-3">
-                  <div className="w-3.5 h-3.5 rounded-full shadow-sm" style={{backgroundColor: s.color}}></div>
-                  <span className="truncate">{s.name}</span>
+          {/* Architectural Status Specification Table */}
+          <div className="w-full space-y-2 mt-6 relative z-10 border-t border-[#E2DDD1]/60 pt-4">
+            <div className="flex items-center justify-between text-[9px] font-mono-tech text-[#8C7B63] uppercase tracking-wider pb-1">
+              <span>สถานะงาน (SPECIFICATION)</span>
+              <span>จำนวน / สัดส่วน</span>
+            </div>
+            {stats.map(s => {
+              const hasItems = s.count > 0;
+              return (
+                <div 
+                  key={s.id} 
+                  className={`flex items-center justify-between p-2 rounded-lg transition-all ${
+                    hasItems ? 'bg-[#FAF8F5]/80 hover:bg-[#FAF8F5] text-gray-800' : 'text-gray-400 opacity-40'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5 min-w-0 pr-2">
+                    <div 
+                      className="w-3 h-3 rounded-[3px] shadow-2xs shrink-0 border border-black/10" 
+                      style={{ backgroundColor: s.color }}
+                    />
+                    <span className="text-xs font-medium truncate">{s.name}</span>
+                  </div>
+                  <div className="flex items-center space-x-2 shrink-0">
+                    <span className="font-mono-tech font-bold text-xs text-[#002447]">{s.count}</span>
+                    <span className="text-[10px] font-mono-tech bg-white px-1.5 py-0.5 rounded border border-[#E2DDD1] text-[#8C7B63] min-w-[36px] text-right">
+                      {s.percent}%
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2 pl-2">
-                  <span className="font-bold text-[#003366] text-sm">{s.count}</span>
-                  <span className="text-[10px] bg-gray-50 px-1.5 py-0.5 rounded text-gray-500 w-9 text-right">{s.percent}%</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        <div className="lg:col-span-2 bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-6 md:p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+        {/* Right Column (7/12 cols): Architectural Task Stream */}
+        <div className="lg:col-span-7 asym-card-inverse bg-white border border-[#E2DDD1] shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 md:p-7 border-b border-[#E2DDD1] bg-[#FAF8F5]/50 flex justify-between items-center">
             <div className="flex flex-col">
-              <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest">รายการใบงานประจำเดือน</h4>
-              <p className="text-[10px] text-[#C5A059] font-bold mt-0.5">{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(selectedMonth))}</p>
+              <span className="tech-stamp">MONTHLY DISPATCH STREAM</span>
+              <h4 className="font-serif-luxury font-bold text-lg md:text-xl text-[#002447] mt-0.5">
+                รายการใบงานประจำงวด
+              </h4>
+              <p className="text-xs text-[#C5A059] font-medium">{selectedMonthFormatted}</p>
             </div>
-            <span className="text-[10px] bg-white px-4 py-1.5 rounded-full border border-gray-100 text-gray-500 font-bold shadow-sm">{filteredTasks.length} รายการ</span>
+            <div className="flex items-center space-x-2">
+              <span className="text-[10px] font-mono-tech bg-white px-3.5 py-1.5 rounded-md border border-[#E2DDD1] text-[#002447] font-bold shadow-2xs">
+                ⊕ {filteredTasks.length} RECORDS
+              </span>
+            </div>
           </div>
-          <div className="flex-1 overflow-auto max-h-[500px]">
+
+          <div className="flex-1 overflow-auto max-h-[580px] p-4 md:p-6 custom-scrollbar bg-[#F8F6F0]/40">
             {filteredTasks.length > 0 ? (
-               <div className="flex flex-col gap-4 p-4 bg-gray-50/30 rounded-2xl">
-                 {filteredTasks.map(t => {
-                   const isSchedOver = isScheduleOverdue(t);
-                   return (
+              <div className="flex flex-col gap-3.5">
+                {filteredTasks.map(t => {
+                  const isSchedOver = isScheduleOverdue(t);
+                  return (
                     <div 
                       key={t.id} 
                       onClick={() => onViewDetail(t)}
-                      className="group relative p-5 md:p-6 bg-white/80 backdrop-blur-md rounded-2xl border border-gray-100/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_30px_rgba(197,160,89,0.15)] hover:border-[#C5A059]/30 hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col md:flex-row md:items-center justify-between text-left gap-4"
+                      className="group relative p-5 bg-white rounded-xl border border-[#E2DDD1] shadow-2xs hover:shadow-md hover:border-[#C5A059]/60 hover:-translate-y-0.5 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col md:flex-row md:items-center justify-between text-left gap-4"
                     >
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#C5A059] to-[#003366] opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                      {/* Flowing Gold Bar on Left edge on Hover */}
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#C5A059] via-[#DFBE77] to-[#002447] opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                       
-                      <div className="flex flex-col min-w-0 flex-1 pl-2 md:pl-0">
+                      <div className="flex flex-col min-w-0 flex-1 pl-2 md:pl-1">
                         <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="font-bold text-[#003366] text-base md:text-lg tracking-tight bg-clip-text group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:from-[#003366] group-hover:to-[#C5A059] transition-all duration-300">
+                          <span className="font-serif-luxury font-bold text-[#002447] text-lg md:text-xl tracking-tight group-hover:text-[#C5A059] transition-colors">
                             {t.taskNo}
                           </span>
                           {isSchedOver && (
-                            <span className="bg-amber-500/10 text-amber-700 border border-amber-500/30 text-[9px] px-2.5 py-1 rounded-full font-bold flex items-center gap-1 shadow-2xs">
-                              ⚠️ เลยกำหนดวันจบงาน
+                            <span className="bg-amber-50 text-amber-800 border border-amber-300/60 text-[9px] font-mono-tech px-2 py-0.5 rounded-[4px] font-bold flex items-center gap-1 shadow-2xs">
+                              ⚠️ เลยกำหนดจบงาน
                             </span>
                           )}
                           {!isSchedOver && isOverdue(t) && (
-                            <span className="bg-red-500/10 text-red-500 border border-red-500/20 text-[9px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.2)]">
+                            <span className="bg-red-50 text-red-700 border border-red-200 text-[9px] font-mono-tech px-2 py-0.5 rounded-[4px] font-bold uppercase tracking-wider">
                               เลยกำหนด
                             </span>
                           )}
                           {isCarryOver(t) && (
-                            <span className="bg-orange-500/10 text-orange-600 border border-orange-500/20 text-[9px] px-2.5 py-1 rounded-full font-bold tracking-wider shadow-[0_0_10px_rgba(249,115,22,0.15)]">
-                              งานค้างจากเดือน {getOriginalMonthStr(t)}
+                            <span className="bg-orange-50 text-orange-700 border border-orange-200 text-[9px] font-mono-tech px-2 py-0.5 rounded-[4px] font-bold tracking-wider">
+                              ยกยอดจาก {getOriginalMonthStr(t)}
                             </span>
                           )}
                         </div>
                         
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-1 text-gray-500">
-                          <div className="flex items-center space-x-1.5 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-gray-600">
+                          <div className="flex items-center space-x-1.5 bg-[#FAF8F5] px-2.5 py-1 rounded-[6px] border border-[#E2DDD1]">
                             <Briefcase size={12} className="text-[#C5A059]" />
-                            <span className="text-[10px] font-bold uppercase tracking-wider truncate max-w-[120px]">{t.company}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider truncate max-w-[130px] text-[#002447]">{t.company}</span>
                           </div>
-                          <div className="flex items-center space-x-1.5 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
-                            <Building2 size={12} className="text-[#003366]" />
-                            <span className="text-[11px] font-medium truncate max-w-[150px]">{t.project}</span>
+                          <div className="flex items-center space-x-1.5 bg-[#FAF8F5] px-2.5 py-1 rounded-[6px] border border-[#E2DDD1]">
+                            <Building2 size={12} className="text-[#002447]" />
+                            <span className="text-[11px] font-medium truncate max-w-[160px] text-gray-700">{t.project}</span>
                           </div>
                           {t.startDate && t.endDate ? (
-                            <div className="flex items-center space-x-1 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 text-[10px] font-semibold text-gray-500">
+                            <div className="flex items-center space-x-1 bg-[#FAF8F5] px-2.5 py-1 rounded-[6px] border border-[#E2DDD1] text-[10px] font-semibold text-gray-600">
                               <CalendarDays size={11} className="text-[#C5A059]" />
-                              <span>{t.startDate} ถึง {t.endDate}</span>
+                              <span>{t.startDate} - {t.endDate}</span>
                             </div>
                           ) : (
                             t.aptDate && (
-                              <div className="flex items-center space-x-1 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 text-[10px] font-semibold text-gray-500">
+                              <div className="flex items-center space-x-1 bg-[#FAF8F5] px-2.5 py-1 rounded-[6px] border border-[#E2DDD1] text-[10px] font-semibold text-gray-600">
                                 <CalendarDays size={11} className="text-[#C5A059]" />
                                 <span>{t.aptDate}</span>
                               </div>
@@ -3283,47 +3518,48 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                         {/* File Attachment Badges */}
                         <div className="flex flex-wrap gap-1.5 mt-2.5">
                           {t.quoteFileUrl && (
-                            <span className="bg-amber-100/90 text-amber-900 text-[9px] px-2 py-0.5 rounded-[3px] font-bold flex items-center gap-1 border-t border-amber-200 border-b-2 border-amber-400 shadow-2xs">
-                              <Paperclip size={9}/> มีใบเสนอราคา
+                            <span className="bg-[#FAF8F5] text-[#92400E] text-[9px] px-2 py-0.5 rounded-[4px] font-bold flex items-center gap-1 border border-[#FDE68A] shadow-2xs">
+                              <Paperclip size={9} className="text-[#B45309]"/> มีใบเสนอราคา
                             </span>
                           )}
                           {t.signedFileUrl && (
-                            <span className="bg-indigo-100/90 text-indigo-900 text-[9px] px-2 py-0.5 rounded-[3px] font-bold flex items-center gap-1 border-t border-indigo-200 border-b-2 border-indigo-400 shadow-2xs">
-                              <ShieldCheck size={9}/> เซ็นต์อนุมัติแล้ว
+                            <span className="bg-[#FAF8F5] text-[#3730A3] text-[9px] px-2 py-0.5 rounded-[4px] font-bold flex items-center gap-1 border border-[#C7D2FE] shadow-2xs">
+                              <ShieldCheck size={9} className="text-[#4338CA]"/> เซ็นต์อนุมัติแล้ว
                             </span>
                           )}
                           {t.taskFileUrl && (
-                            <span className="bg-blue-100/90 text-blue-900 text-[9px] px-2 py-0.5 rounded-[3px] font-bold flex items-center gap-1 border-t border-blue-200 border-b-2 border-blue-400 shadow-2xs">
-                              <FileText size={9}/> มีใบงาน
+                            <span className="bg-[#FAF8F5] text-[#1E40AF] text-[9px] px-2 py-0.5 rounded-[4px] font-bold flex items-center gap-1 border border-[#BFDBFE] shadow-2xs">
+                              <FileText size={9} className="text-[#1D4ED8]"/> มีใบงาน
                             </span>
                           )}
                         </div>
                         
                         {t.status === 'จบงานและรอรับเอกสารวางบิล' && (
-                          <div className="mt-3 inline-flex items-center space-x-1.5 bg-orange-50 text-orange-600 px-3 py-1.5 rounded-lg border border-orange-100/50 w-max animate-pulse">
-                            <AlertCircle size={12} />
+                          <div className="mt-3 inline-flex items-center space-x-1.5 bg-orange-50 text-orange-700 px-3 py-1 rounded-md border border-orange-200 w-max animate-pulse">
+                            <AlertCircle size={12} className="text-orange-600" />
                             <span className="text-[10px] font-bold tracking-wide">กรุณาส่งเอกสารวางบิลภายในวันที่ 15</span>
                           </div>
                         )}
                       </div>
                       
-                      <div className="flex flex-row md:flex-col items-center md:items-end justify-between mt-2 md:mt-0 shrink-0 pl-2 md:pl-0 border-t md:border-t-0 border-gray-50 pt-3 md:pt-0">
-                         <div className="group-hover:scale-105 transition-transform duration-300 shadow-sm">
-                           <StatusTag label={t.status} />
-                         </div>
-                         <div className="flex items-center space-x-1 mt-0 md:mt-2 bg-gray-50/80 px-2.5 py-1 rounded-full border border-gray-100">
-                           <MapPin size={10} className="text-gray-400" />
-                           <span className="text-[10px] text-gray-500 font-bold tracking-wide">{t.area}</span>
-                         </div>
+                      <div className="flex flex-row md:flex-col items-center md:items-end justify-between mt-2 md:mt-0 shrink-0 pl-2 md:pl-0 border-t md:border-t-0 border-[#E2DDD1]/60 pt-3 md:pt-0">
+                        <div className="group-hover:scale-105 transition-transform duration-300">
+                          <StatusTag label={t.status} />
+                        </div>
+                        <div className="flex items-center space-x-1.5 mt-0 md:mt-2 bg-[#FAF8F5] px-2.5 py-1 rounded-md border border-[#E2DDD1]">
+                          <MapPin size={10} className="text-[#C5A059]" />
+                          <span className="text-[10px] text-[#002447] font-bold tracking-wide">{t.area}</span>
+                        </div>
                       </div>
                     </div>
-                   );
-                 })}
-               </div>
+                  );
+                })}
+              </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center py-24 text-gray-300">
-                <CalendarDays size={48} className="mb-3 opacity-10"/>
-                <p className="text-sm font-bold">ไม่พบข้อมูลใบงานในเดือนนี้</p>
+              <div className="flex-1 flex flex-col items-center justify-center py-24 text-gray-400">
+                <CalendarDays size={48} className="mb-3 text-[#C5A059]/30"/>
+                <p className="font-serif-luxury text-base font-bold text-[#002447]">ไม่พบข้อมูลใบงานในงวดนี้</p>
+                <p className="text-[10px] font-mono-tech text-gray-400 mt-1 uppercase">NO CORRESPONDING RECORDS FOUND</p>
               </div>
             )}
           </div>
@@ -3370,12 +3606,18 @@ function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = 
   };
 
   return (
-    <form onSubmit={sub} className={`bg-white p-6 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-6 w-full max-w-3xl mx-auto ${isModal ? '' : 'mb-24'}`}>
-      <div className="flex items-center space-x-4 mb-2">
-        <div className="w-12 h-12 bg-[#003366] text-white rounded-2xl flex items-center justify-center shrink-0">
-          {initialData ? <Edit size={24}/> : <PlusCircle size={24}/>}
+    <form onSubmit={sub} className={`asym-card p-6 md:p-10 border border-[#E2DDD1] shadow-sm space-y-6 w-full max-w-3xl mx-auto bg-white relative overflow-hidden ${isModal ? '' : 'mb-24'}`}>
+      <div className="absolute top-0 right-0 w-48 h-48 bg-drafting-grid opacity-20 pointer-events-none"></div>
+      <div className="flex items-center space-x-4 mb-2 relative z-10">
+        <div className="w-12 h-12 bg-[#002447] text-[#C5A059] rounded-xl flex items-center justify-center shrink-0 border border-[#C5A059]/30 shadow-sm">
+          {initialData ? <Edit size={22}/> : <PlusCircle size={22}/>}
         </div>
-        <h3 className="font-bold text-xl md:text-2xl text-[#003366] text-left">{initialData ? 'แก้ไขข้อมูลใบงาน' : 'เปิดรายการใหม่ (รอใบเสนอราคา)'}</h3>
+        <div>
+          <span className="tech-stamp">{initialData ? 'RECORD SPECIFICATION UPDATE' : 'NEW DISPATCH INITIATION'}</span>
+          <h3 className="font-serif-luxury font-bold text-xl md:text-2xl text-[#002447] text-left">
+            {initialData ? 'แก้ไขข้อมูลใบงาน' : 'เปิดรายการใหม่ (รอใบเสนอราคา)'}
+          </h3>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -3492,31 +3734,51 @@ function Management({ tasks, settings, onSave, onDelete, onViewDetail, onRequest
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 mb-20">
-      <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col gap-4">
-        <div className="relative">
-          <Search size={18} className="absolute left-6 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          <input placeholder="ค้นหาใบงาน..." className="w-full pl-14 pr-6 py-4 bg-gray-50 rounded-2xl focus:ring-2 focus:ring-[#C5A059] text-sm" value={search} onChange={e=>setSearch(e.target.value)} />
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          <select value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="p-3.5 bg-gray-50 rounded-2xl text-sm"><option value="">ทุกเดือน</option>{availableMonths.map(m => <option key={m} value={m}>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}</option>)}</select>
-          <select value={filterProject} onChange={e=>setFilterProject(e.target.value)} className="p-3.5 bg-gray-50 rounded-2xl text-sm"><option value="">ทุกโครงการ</option>{settings.projects.map(p => <option key={p} value={p}>{p}</option>)}</select>
-          <select value={filterCompany} onChange={e=>setFilterCompany(e.target.value)} className="p-3.5 bg-gray-50 rounded-2xl text-sm"><option value="">ทุกร้านค้า</option>{settings.companies.map(c => <option key={c} value={c}>{c}</option>)}</select>
-          <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="p-3.5 bg-gray-50 rounded-2xl text-sm"><option value="">ทุกสถานะ</option>{STATUSES.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select>
+      <div className="asym-card p-6 md:p-7 border border-[#E2DDD1] shadow-sm flex flex-col gap-4 bg-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-drafting-grid opacity-20 pointer-events-none"></div>
+        <div className="relative z-10 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <span className="tech-stamp">TASK REGISTER & MANAGEMENT</span>
+              <h3 className="font-serif-luxury text-xl md:text-2xl font-bold text-[#002447]">
+                จัดการข้อมูลใบงาน V-TRACK
+              </h3>
+            </div>
+            <span className="text-[10px] font-mono-tech text-[#002447] bg-[#FAF8F5] border border-[#E2DDD1] px-3 py-1.5 rounded-md font-bold self-start sm:self-auto">
+              ⊕ {filtered.length} ITEMS MATCHED
+            </span>
+          </div>
+
+          <div className="relative">
+            <Search size={18} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-[#C5A059]" />
+            <input 
+              placeholder="ค้นหาตามเลขที่ใบงาน หรือชื่อโครงการ..." 
+              className="w-full pl-12 pr-6 py-3.5 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-sm text-[#002447] font-medium transition-all" 
+              value={search} 
+              onChange={e=>setSearch(e.target.value)} 
+            />
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+            <select value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="p-3 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447]"><option value="">ทุกเดือน</option>{availableMonths.map(m => <option key={m} value={m}>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}</option>)}</select>
+            <select value={filterProject} onChange={e=>setFilterProject(e.target.value)} className="p-3 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447]"><option value="">ทุกโครงการ</option>{settings.projects.map(p => <option key={p} value={p}>{p}</option>)}</select>
+            <select value={filterCompany} onChange={e=>setFilterCompany(e.target.value)} className="p-3 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447]"><option value="">ทุกร้านค้า</option>{settings.companies.map(c => <option key={c} value={c}>{c}</option>)}</select>
+            <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="p-3 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447]"><option value="">ทุกสถานะ</option>{STATUSES.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select>
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+      <div className="asym-card-inverse bg-white rounded-2xl shadow-sm border border-[#E2DDD1] overflow-hidden">
         {/* Table Desktop: Fixed Layout */}
         <div className="hidden md:block w-full">
           <table className="w-full text-left text-sm table-fixed">
-            <thead className="bg-gray-50 text-gray-400 text-[10px] uppercase font-bold border-b border-gray-100">
+            <thead className="bg-[#FAF8F5] text-[#8C7B63] text-[10px] uppercase font-mono-tech tracking-wider border-b border-[#E2DDD1]">
               <tr>
-                <th className="w-2/12 px-6 py-5">เลขที่ใบงาน</th>
-                <th className="w-3/12 px-6 py-5">โครงการ / แผนงาน</th>
-                <th className="w-2/12 px-6 py-5">รายละเอียด</th>
-                <th className="w-1/12 px-6 py-5 text-right">ค่าใช้จ่าย</th>
-                <th className="w-2/12 px-6 py-5 text-center">สถานะ</th>
-                <th className="w-2/12 px-6 py-5 text-center">จัดการ</th>
+                <th className="w-2/12 px-6 py-4">เลขที่ใบงาน</th>
+                <th className="w-3/12 px-6 py-4">โครงการ / แผนงาน</th>
+                <th className="w-2/12 px-6 py-4">รายละเอียด</th>
+                <th className="w-1/12 px-6 py-4 text-right">ค่าใช้จ่าย</th>
+                <th className="w-2/12 px-6 py-4 text-center">สถานะ</th>
+                <th className="w-2/12 px-6 py-4 text-center">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -3643,40 +3905,41 @@ function Management({ tasks, settings, onSave, onDelete, onViewDetail, onRequest
 
 function StatusTag({ label }) {
   const s = STATUSES.find(x => x.name === label);
-  // 80's Classic Embossed DYMO Tape Style: High contrast, tactile bevels, crisp white font, zero synthwave blur
+  // Refined 80s Architectural Specification Badge: Tactile, dignified, high contrast, zero glare
   const tapeStyles = {
-    'รอใบเสนอราคา': { bg: '#475569', top: '#64748B', bottom: '#1E293B', dot: '#CBD5E1' },
-    'อยู่ระหว่างตรวจสอบใบเสนอราคา': { bg: '#B45309', top: '#D97706', bottom: '#78350F', dot: '#FDE68A' },
-    'อนุมัติใบเสนอราคาแล้ว': { bg: '#4338CA', top: '#6366F1', bottom: '#312E81', dot: '#C7D2FE' },
-    'เปิดใบงานในระบบแล้ว': { bg: '#1D4ED8', top: '#3B82F6', bottom: '#1E3A8A', dot: '#BFDBFE' },
-    'จบงานและรอรับเอกสารวางบิล': { bg: '#6D28D9', top: '#8B5CF6', bottom: '#4C1D95', dot: '#DDD6FE' },
-    'ได้รับเอกสารวางบิลแล้ว': { bg: '#BE185D', top: '#EC4899', bottom: '#831843', dot: '#FBCFE8' },
-    'ส่งเอกสารเบิกจ่ายแล้ว': { bg: '#047857', top: '#10B981', bottom: '#064E3B', dot: '#A7F3D0' },
-    'ยกเลิก': { bg: '#B91C1C', top: '#EF4444', bottom: '#7F1D1D', dot: '#FECACA' }
+    'รอใบเสนอราคา': { bg: '#475569', top: '#64748B', bottom: '#1E293B', dot: '#CBD5E1', border: '#334155' },
+    'อยู่ระหว่างตรวจสอบใบเสนอราคา': { bg: '#92400E', top: '#B45309', bottom: '#78350F', dot: '#FDE68A', border: '#78350F' },
+    'อนุมัติใบเสนอราคาแล้ว': { bg: '#3730A3', top: '#4338CA', bottom: '#312E81', dot: '#C7D2FE', border: '#312E81' },
+    'เปิดใบงานในระบบแล้ว': { bg: '#1E40AF', top: '#1D4ED8', bottom: '#1E3A8A', dot: '#BFDBFE', border: '#1E3A8A' },
+    'จบงานและรอรับเอกสารวางบิล': { bg: '#6B21A8', top: '#7E22CE', bottom: '#581C87', dot: '#E9D5FF', border: '#581C87' },
+    'ได้รับเอกสารวางบิลแล้ว': { bg: '#9F1239', top: '#BE123C', bottom: '#881337', dot: '#FECDD3', border: '#881337' },
+    'ส่งเอกสารเบิกจ่ายแล้ว': { bg: '#065F46', top: '#047857', bottom: '#064E3B', dot: '#A7F3D0', border: '#064E3B' },
+    'ยกเลิก': { bg: '#991B1B', top: '#B91C1C', bottom: '#7F1D1D', dot: '#FECACA', border: '#7F1D1D' }
   };
 
   const tape = tapeStyles[label] || { 
     bg: s?.color || '#334155', 
     top: '#64748B', 
     bottom: '#1E293B', 
-    dot: '#E2E8F0' 
+    dot: '#E2E8F0',
+    border: '#1E293B'
   };
 
   return (
     <span 
-      className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[4px] text-[10px] font-bold tracking-wider text-white whitespace-nowrap shadow-[0_1px_2px_rgba(0,0,0,0.2)] select-none shrink-0"
+      className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[5px] text-[10px] font-bold tracking-wider text-white whitespace-nowrap shadow-[0_1px_3px_rgba(0,0,0,0.25)] select-none shrink-0"
       style={{
         backgroundColor: tape.bg,
         borderTop: `1.5px solid ${tape.top}`,
         borderBottom: `2px solid ${tape.bottom}`,
-        borderLeft: '1px solid rgba(0,0,0,0.12)',
-        borderRight: '1px solid rgba(0,0,0,0.12)',
+        borderLeft: `1px solid ${tape.border || 'rgba(0,0,0,0.15)'}`,
+        borderRight: `1px solid ${tape.border || 'rgba(0,0,0,0.15)'}`,
         textShadow: '0 1px 1px rgba(0,0,0,0.4)',
-        letterSpacing: '0.03em'
+        letterSpacing: '0.04em'
       }}
       title={`สถานะ: ${label}`}
     >
-      <span className="w-1.5 h-1.5 rounded-full inline-block shrink-0" style={{ backgroundColor: tape.dot }} />
+      <span className="w-1.5 h-1.5 rounded-full inline-block shrink-0 ring-1 ring-white/20" style={{ backgroundColor: tape.dot }} />
       <span>{label}</span>
     </span>
   );
@@ -3692,18 +3955,20 @@ function CalendarView({ tasks, onViewDetail }) {
   const grid = [...Array(first).fill(null), ...Array(daysIn).keys()].map(i => i === null ? null : i + 1);
 
   return (
-    <div className="bg-white p-5 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-100 animate-in fade-in duration-700 mb-20 relative">
-      <div className="flex justify-between items-center mb-8">
-        <button onClick={()=>setNow(new Date(y, m-1, 1))} className="p-3 bg-gray-50 rounded-2xl text-gray-400 hover:bg-gray-100"><ChevronLeft size={18}/></button>
+    <div className="asym-card p-5 md:p-8 border border-[#E2DDD1] shadow-sm animate-in fade-in duration-700 mb-20 relative bg-white overflow-hidden">
+      <div className="absolute top-0 right-0 w-48 h-48 bg-drafting-grid opacity-20 pointer-events-none"></div>
+      <div className="flex justify-between items-center mb-8 relative z-10">
+        <button onClick={()=>setNow(new Date(y, m-1, 1))} className="p-3 bg-[#FAF8F5] border border-[#E2DDD1] rounded-xl text-[#002447] hover:bg-[#F3EFE6] transition-colors"><ChevronLeft size={18}/></button>
         <div className="text-center">
-          <h4 className="font-bold text-[#003366] md:text-lg">{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(now)}</h4>
-          <span className="text-[10px] text-gray-400 font-medium">ปฏิทินแผนงานต่อเนื่อง (Multi-day View)</span>
+          <span className="tech-stamp">PROJECT SCHEDULE TIMELINE</span>
+          <h4 className="font-serif-luxury font-bold text-[#002447] text-xl md:text-2xl mt-0.5">{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(now)}</h4>
+          <span className="text-[10px] text-[#8C7B63] font-medium font-mono-tech uppercase">MULTI-DAY ARCHITECTURAL TIMELINE</span>
         </div>
-        <button onClick={()=>setNow(new Date(y, m+1, 1))} className="p-3 bg-gray-50 rounded-2xl text-gray-400 hover:bg-gray-100"><ChevronRight size={18}/></button>
+        <button onClick={()=>setNow(new Date(y, m+1, 1))} className="p-3 bg-[#FAF8F5] border border-[#E2DDD1] rounded-xl text-[#002447] hover:bg-[#F3EFE6] transition-colors"><ChevronRight size={18}/></button>
       </div>
 
-      <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-[1.5rem] overflow-hidden border border-gray-100">
-        {['อา','จ','อ','พ','พฤ','ศ','ส'].map(d=><div key={d} className="bg-white p-3 text-center text-[10px] text-gray-300 font-bold uppercase">{d}</div>)}
+      <div className="grid grid-cols-7 gap-px bg-[#E2DDD1] rounded-2xl overflow-hidden border border-[#E2DDD1] relative z-10">
+        {['อา','จ','อ','พ','พฤ','ศ','ส'].map(d=><div key={d} className="bg-[#FAF8F5] p-3 text-center text-[10px] text-[#8C7B63] font-mono-tech font-bold uppercase">{d}</div>)}
         {grid.map((d, i) => {
           const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
           const tks = tasks.filter(t => {
@@ -4023,26 +4288,26 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
   return (
     <div className="space-y-8 mb-24 animate-in fade-in text-left">
       {/* 1. Storage Usage Indicator (สถานะพื้นที่ Firebase Storage) */}
-      <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+      <div className="asym-card p-6 md:p-8 border border-[#E2DDD1] shadow-sm bg-white relative overflow-hidden">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
-              <HardDrive size={20}/>
+            <div className="w-10 h-10 bg-[#FAF8F5] border border-[#E2DDD1] text-[#002447] rounded-xl flex items-center justify-center">
+              <HardDrive size={20} className="text-[#C5A059]"/>
             </div>
             <div>
               <h4 className="text-xs md:text-sm font-bold text-gray-800">พื้นที่จัดเก็บเอกสาร Firebase Storage</h4>
               <p className="text-[10px] text-gray-400">แผนบริการฟรี Spark (โควตา 5,120 MB)</p>
             </div>
           </div>
-          <span className="text-xs font-bold text-[#003366] bg-indigo-50 px-3 py-1 rounded-full">
+          <span className="text-xs font-bold text-[#002447] bg-[#FAF8F5] border border-[#E2DDD1] px-3 py-1 rounded-full font-mono-tech">
             {storageStats.percent}% ใช้งาน
           </span>
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full bg-gray-100 h-3.5 rounded-full overflow-hidden mb-2">
+        <div className="w-full bg-[#FAF8F5] h-3.5 rounded-full overflow-hidden mb-2 border border-[#E2DDD1]">
           <div 
-            className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-[#C5A059] transition-all duration-500 rounded-full"
+            className="h-full bg-gradient-to-r from-[#002447] via-[#C5A059] to-[#DFBE77] transition-all duration-500 rounded-full"
             style={{ width: `${Math.max(2, storageStats.percent)}%` }}
           />
         </div>
@@ -4054,34 +4319,39 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
       </div>
 
       {/* 2. ระบบออกรายงานและสำรองข้อมูล */}
-      <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col">
-        <h4 className="text-[10px] md:text-xs font-bold text-[#003366] mb-6 uppercase tracking-widest flex items-center"><Printer size={16} className="mr-2"/> ระบบออกรายงานและสำรองข้อมูล</h4>
+      <div className="asym-card p-6 md:p-8 border border-[#E2DDD1] shadow-sm bg-white relative overflow-hidden flex flex-col">
+        <div className="flex items-center space-x-2 mb-4">
+          <span className="tech-stamp">REPORT EXPORT & DATA BACKUP</span>
+        </div>
+        <h4 className="text-sm font-serif-luxury font-bold text-[#002447] mb-6 tracking-wide flex items-center">
+          <Printer size={18} className="mr-2 text-[#C5A059]"/> ระบบออกรายงานและสำรองข้อมูล
+        </h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">ประจำเดือน</label>
-            <select value={reportMonth} onChange={e=>setReportMonth(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl text-xs md:text-sm border-none focus:ring-2 focus:ring-[#C5A059]"><option value="">ทุกเดือน</option>{availableMonths.map(m => <option key={m} value={m}>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}</option>)}</select>
+            <select value={reportMonth} onChange={e=>setReportMonth(e.target.value)} className="w-full p-3 bg-[#FAF8F5] rounded-xl text-xs md:text-sm border border-[#E2DDD1] focus:ring-1 focus:ring-[#C5A059]"><option value="">ทุกเดือน</option>{availableMonths.map(m => <option key={m} value={m}>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}</option>)}</select>
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">โครงการ</label>
-            <select value={reportProj} onChange={e=>setReportProj(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl text-xs md:text-sm border-none focus:ring-2 focus:ring-[#C5A059]"><option value="">ทุกโครงการ</option>{settings.projects.map(p => <option key={p} value={p}>{p}</option>)}</select>
+            <select value={reportProj} onChange={e=>setReportProj(e.target.value)} className="w-full p-3 bg-[#FAF8F5] rounded-xl text-xs md:text-sm border border-[#E2DDD1] focus:ring-1 focus:ring-[#C5A059]"><option value="">ทุกโครงการ</option>{settings.projects.map(p => <option key={p} value={p}>{p}</option>)}</select>
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">ร้านค้า</label>
-            <select value={reportComp} onChange={e=>setReportComp(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl text-xs md:text-sm border-none focus:ring-2 focus:ring-[#C5A059]"><option value="">ทุกร้านค้า</option>{settings.companies.map(c => <option key={c} value={c}>{c}</option>)}</select>
+            <select value={reportComp} onChange={e=>setReportComp(e.target.value)} className="w-full p-3 bg-[#FAF8F5] rounded-xl text-xs md:text-sm border border-[#E2DDD1] focus:ring-1 focus:ring-[#C5A059]"><option value="">ทุกร้านค้า</option>{settings.companies.map(c => <option key={c} value={c}>{c}</option>)}</select>
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">สถานะ</label>
-            <select value={reportStatus} onChange={e=>setReportStatus(e.target.value)} className="w-full p-3 bg-gray-50 rounded-2xl text-xs md:text-sm border-none focus:ring-2 focus:ring-[#C5A059]"><option value="">ทุกสถานะ</option>{STATUSES.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}</select>
+            <select value={reportStatus} onChange={e=>setReportStatus(e.target.value)} className="w-full p-3 bg-[#FAF8F5] rounded-xl text-xs md:text-sm border border-[#E2DDD1] focus:ring-1 focus:ring-[#C5A059]"><option value="">ทุกสถานะ</option>{STATUSES.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}</select>
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-4">
-          <button onClick={() => triggerPrint({ selectedMonth: reportMonth, filterProj: reportProj, filterComp: reportComp, filterStatus: reportStatus })} className="flex-1 py-4 bg-[#003366] text-white rounded-2xl font-bold flex items-center justify-center space-x-2"><Printer size={18}/><span>พิมพ์รายงาน PDF</span></button>
-          <button onClick={handleExportExcel} className="flex-1 py-4 bg-[#10B981] text-white rounded-2xl font-bold flex items-center justify-center space-x-2"><FileDown size={18}/><span>ดาวน์โหลด Backup Excel</span></button>
+          <button onClick={() => triggerPrint({ selectedMonth: reportMonth, filterProj: reportProj, filterComp: reportComp, filterStatus: reportStatus })} className="flex-1 py-3.5 bg-gradient-to-r from-[#002447] to-[#003366] text-white rounded-xl font-bold flex items-center justify-center space-x-2 shadow-sm"><Printer size={18}/><span>พิมพ์รายงาน PDF</span></button>
+          <button onClick={handleExportExcel} className="flex-1 py-3.5 bg-gradient-to-r from-[#047857] to-[#065F46] text-white rounded-xl font-bold flex items-center justify-center space-x-2 shadow-sm"><FileDown size={18}/><span>ดาวน์โหลด Backup Excel</span></button>
         </div>
       </div>
 
       {/* 3. คลังรายการที่ยกเลิก (Cancelled Tasks Archive) */}
-      <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+      <div className="asym-card p-6 md:p-8 border border-[#E2DDD1] shadow-sm bg-white relative overflow-hidden">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center">

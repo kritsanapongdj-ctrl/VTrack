@@ -512,8 +512,13 @@ const GAS_DEFAULT_SCRIPT = `function doPost(e) {
 
 const triggerEmailNotification = async (task, eventType, extraData = {}, currentSettings = null) => {
   const webhookUrl = currentSettings?.webhookUrl || GOOGLE_SHEETS_WEBHOOK_URL;
-  if (!webhookUrl) {
+  const trimmed = (webhookUrl || '').trim();
+  if (!trimmed) {
     console.log('Email notification skipped: No Webhook URL configured in Settings');
+    return false;
+  }
+  if (trimmed.includes('/library/') || !trimmed.includes('/macros/s/') || !trimmed.endsWith('/exec')) {
+    console.warn('Email notification skipped: Invalid Webhook URL. It must be a Web App URL ending with /exec, got:', trimmed);
     return false;
   }
   try {
@@ -3853,10 +3858,21 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const handleSaveEmailSettings = async () => {
+    const trimmedUrl = webhookUrl.trim();
+    if (trimmedUrl) {
+      if (trimmedUrl.includes('/library/')) {
+        alert('⚠️ URL ไม่ถูกต้อง!\n\nลิงก์ที่คุณนำมาใส่เป็นลิงก์ประเภท "คลัง" (Library) ซึ่งใช้รับส่งข้อมูลไม่ได้ครับ\n\nที่ถูกต้องจะต้องเป็นลิงก์ "เว็บแอป" (Web app) ที่ลงท้ายด้วย /exec เช่น:\nhttps://script.google.com/macros/s/.../exec\n\n(ใน Google Apps Script ให้กด Deploy ➔ Manage deployments ➔ ดูลิงก์ Web app ครับ)');
+        return;
+      }
+      if (!trimmedUrl.includes('/macros/s/') || !trimmedUrl.endsWith('/exec')) {
+        alert('⚠️ รูปแบบ Webhook URL ไม่ถูกต้อง!\n\nURL ของ Google Apps Script จะต้องขึ้นต้นด้วย:\nhttps://script.google.com/macros/s/...\nและลงท้ายด้วย /exec เท่านั้นครับ');
+        return;
+      }
+    }
     await updateSettings({
       ...settings,
       notificationEmail: notificationEmail.trim(),
-      webhookUrl: webhookUrl.trim()
+      webhookUrl: trimmedUrl
     });
     alert('บันทึกการตั้งค่าอีเมลแจ้งเตือนเรียบร้อยแล้ว!');
   };
@@ -3866,9 +3882,17 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
       alert('กรุณากรอก "อีเมลสำหรับรับแจ้งเตือน (เจ้าหน้าที่)" ก่อนทำการทดสอบ');
       return;
     }
-    const currentWebhook = webhookUrl.trim() || GOOGLE_SHEETS_WEBHOOK_URL;
+    const currentWebhook = (webhookUrl.trim() || GOOGLE_SHEETS_WEBHOOK_URL).trim();
     if (!currentWebhook) {
       alert('กรุณากรอก "Google Apps Script Webhook URL" ก่อนทดสอบ (สามารถกดปุ่ม "ดูโค้ด & วิธีติดตั้ง Webhook ฟรี" เพื่อสร้างได้ฟรีใน 1 นาที)');
+      return;
+    }
+    if (currentWebhook.includes('/library/')) {
+      alert('⚠️ Webhook URL ไม่ถูกต้อง!\n\nลิงก์นี้เป็นลิงก์ประเภท "คลัง" (Library) ไม่สามารถใช้ส่งอีเมลได้ครับ\n\nต้องเป็นลิงก์ "เว็บแอป" (Web app) ที่ลงท้ายด้วย /exec ครับ');
+      return;
+    }
+    if (!currentWebhook.includes('/macros/s/') || !currentWebhook.endsWith('/exec')) {
+      alert('⚠️ รูปแบบ Webhook URL ไม่ถูกต้อง!\n\nต้องขึ้นต้นด้วย https://script.google.com/macros/s/...\nและลงท้ายด้วย /exec ครับ');
       return;
     }
     setIsTestingEmail(true);

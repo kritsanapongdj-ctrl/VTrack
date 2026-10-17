@@ -568,7 +568,7 @@ const getMonthStr = (timestamp) => {
 };
 
 const getEffectiveMonth = (task) => {
-  if (!task) return '';
+  if (!task || task.isDeleted || task.status === 'ยกเลิก') return '';
   const isCompleted = task.status === 'ส่งเอกสารเบิกจ่ายแล้ว' && !!task.payDate;
   const baseMonth = getMonthStr(task.startDate || task.aptDate || task.createdAt);
   const currentMonth = getMonthStr(Date.now());
@@ -3260,12 +3260,24 @@ function PrintReport({ tasks, printData, onDone }) {
 // -------------------------------------------------------------
 
 function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
-  const availableMonths = useMemo(() => {
-    const months = tasks.map(t => getEffectiveMonth(t)).filter(m => m !== '');
-    return [...new Set([new Date().toISOString().slice(0, 7), ...months])].sort().reverse();
-  }, [tasks]);
+  const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
 
-  const [selectedMonth, setSelectedMonth] = useState(availableMonths[0] || new Date().toISOString().slice(0, 7));
+  const availableMonths = useMemo(() => {
+    const months = tasks
+      .filter(t => !t.isDeleted && t.status !== 'ยกเลิก')
+      .map(t => getEffectiveMonth(t))
+      .filter(m => m !== '');
+    return [...new Set([currentMonth, ...months])].sort().reverse();
+  }, [tasks, currentMonth]);
+
+  const [selectedMonth, setSelectedMonth] = useState(() => currentMonth);
+
+  useEffect(() => {
+    if (availableMonths.length > 0 && !availableMonths.includes(selectedMonth)) {
+      setSelectedMonth(availableMonths.includes(currentMonth) ? currentMonth : availableMonths[0]);
+    }
+  }, [availableMonths, selectedMonth, currentMonth]);
+
   const [filterProj, setFilterProj] = useState('');
   const [filterComp, setFilterComp] = useState('');
 
@@ -3708,7 +3720,10 @@ function Management({ tasks, settings, onSave, onDelete, onViewDetail, onRequest
   const itemsPerPage = 10;
 
   const availableMonths = useMemo(() => {
-    const months = tasks.map(t => getEffectiveMonth(t)).filter(m => m !== '');
+    const months = tasks
+      .filter(t => !t.isDeleted && t.status !== 'ยกเลิก')
+      .map(t => getEffectiveMonth(t))
+      .filter(m => m !== '');
     return [...new Set(months)].sort().reverse();
   }, [tasks]);
   
@@ -4080,12 +4095,23 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
     setCompanyEmails(settings.companyEmails || {});
   }, [settings]);
   
-  const availableMonths = useMemo(() => {
-    const months = tasks.map(t => getEffectiveMonth(t)).filter(m => m !== '');
-    return [...new Set([new Date().toISOString().slice(0, 7), ...months])].sort().reverse();
-  }, [tasks]);
+  const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
 
-  const [reportMonth, setReportMonth] = useState(availableMonths[0] || new Date().toISOString().slice(0, 7));
+  const availableMonths = useMemo(() => {
+    const months = tasks
+      .filter(t => !t.isDeleted && t.status !== 'ยกเลิก')
+      .map(t => getEffectiveMonth(t))
+      .filter(m => m !== '');
+    return [...new Set([currentMonth, ...months])].sort().reverse();
+  }, [tasks, currentMonth]);
+
+  const [reportMonth, setReportMonth] = useState(() => currentMonth);
+
+  useEffect(() => {
+    if (availableMonths.length > 0 && !availableMonths.includes(reportMonth)) {
+      setReportMonth(availableMonths.includes(currentMonth) ? currentMonth : availableMonths[0]);
+    }
+  }, [availableMonths, reportMonth, currentMonth]);
   const [reportProj, setReportProj] = useState('');
   const [reportComp, setReportComp] = useState('');
   const [reportStatus, setReportStatus] = useState('');

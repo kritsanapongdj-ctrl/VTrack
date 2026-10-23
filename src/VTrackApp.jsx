@@ -12,6 +12,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, getDoc, setDoc, onSnapshot, addDoc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { stampSignatureOnPdfAdvanced, generateStampBadgePng } from './utils/pdfStamper';
 
 // --- Firebase Initialization ---
 const userFirebaseConfig = {
@@ -212,79 +213,25 @@ const deleteFileFromStore = async (fileUrlOrId) => {
   }
 };
 
-const stampSignatureOnPdf = async (pdfUrlOrId, signaturePngBase64) => {
+const stampSignatureOnPdf = async (pdfUrlOrId, signaturePngOrOptions) => {
   const dataUrl = await getFileDataUrl(pdfUrlOrId);
   if (!dataUrl) throw new Error("ไม่พบไฟล์เอกสารสำหรับเซ็นต์");
 
-  const base64Content = dataUrl.split(';base64,')[1];
-  const binaryString = atob(base64Content);
-  const len = binaryString.length;
-  const existingPdfBytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    existingPdfBytes[i] = binaryString.charCodeAt(i);
+  if (typeof signaturePngOrOptions === 'object' && signaturePngOrOptions !== null) {
+    return await stampSignatureOnPdfAdvanced(dataUrl, signaturePngOrOptions);
   }
 
-  const pdfDoc = await PDFDocument.load(existingPdfBytes);
-
-  const pngImage = await pdfDoc.embedPng(signaturePngBase64);
-  const pages = pdfDoc.getPages();
-  const lastPage = pages[pages.length - 1];
-  const { width } = lastPage.getSize();
-
-  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const helveticaRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-  const stampW = 210;
-  const stampH = 75;
-  const stampX = Math.max(20, width - stampW - 25);
-  const stampY = 30;
-
-  lastPage.drawRectangle({
-    x: stampX,
-    y: stampY,
-    width: stampW,
-    height: stampH,
-    color: rgb(0.97, 0.98, 1.0),
-    borderColor: rgb(0.39, 0.4, 0.95),
-    borderWidth: 1.5,
+  // Fallback for legacy signature string calls
+  return await stampSignatureOnPdfAdvanced(dataUrl, {
+    signatureDataUrl: signaturePngOrOptions,
+    signerName: 'เจ้าหน้าที่โครงการ',
+    signerRole: 'ผู้ตรวจรับงาน / วิศวกรโครงการ',
+    placement: 'bottom-right',
+    targetPages: 'last',
+    includeSeal: true,
   });
-
-  lastPage.drawText('APPROVED & VERIFIED', {
-    x: stampX + 12,
-    y: stampY + stampH - 16,
-    size: 8.5,
-    font: helveticaBold,
-    color: rgb(0.2, 0.25, 0.6),
-  });
-
-  const signDateStr = new Date().toLocaleDateString('th-TH');
-  lastPage.drawText(`Signed: ${signDateStr}`, {
-    x: stampX + 12,
-    y: stampY + stampH - 28,
-    size: 7.5,
-    font: helveticaRegular,
-    color: rgb(0.35, 0.35, 0.45),
-  });
-
-  const imgW = pngImage.width || 85;
-  const imgH = pngImage.height || 48;
-  const maxBoxW = 85;
-  const maxBoxH = 48;
-  const scale = Math.min(maxBoxW / imgW, maxBoxH / imgH);
-  const drawW = imgW * scale;
-  const drawH = imgH * scale;
-  const drawX = (stampX + stampW - 95) + (maxBoxW - drawW) / 2;
-  const drawY = (stampY + 8) + (maxBoxH - drawH) / 2;
-
-  lastPage.drawImage(pngImage, {
-    x: drawX,
-    y: drawY,
-    width: drawW,
-    height: drawH,
-  });
-
-  return await pdfDoc.save();
 };
+
 
 const convertImageToPngDataUrl = (fileOrDataUrl) => {
   return new Promise((resolve, reject) => {
@@ -832,21 +779,37 @@ export default function App() {
     }
   };
 
-  const handleConfirmSign = async (task, signaturePngDataUrl) => {
+  const handleConfirmSign = async (task, signPayload) => {
     const fileSource = task.quoteFileUrl || task.quoteFileId;
     if (!fileSource) {
       alert("ไม่พบไฟล์ใบเสนอราคาต้นฉบับ");
       return;
     }
     try {
-      const signedPdfBytes = await stampSignatureOnPdf(fileSource, signaturePngDataUrl);
+      const isObjectPayload = typeof signPayload === 'object' && signPayload !== null;
+      const signatureDataUrl = isObjectPayload ? signPayload.signatureDataUrl : signPayload;
+      const signerName = (isObjectPayload && signPayload.signerName) ? signPayload.signerName : 'เจ้าหน้าที่โครงการ';
+      const signerRole = (isObjectPayload && signPayload.signerRole) ? signPayload.signerRole : 'ผู้ตรวจรับงาน';
+
+      const stampOptions = {
+        signatureDataUrl,
+        signerName,
+        signerRole,
+        taskNo: task.taskNo,
+        company: task.company,
+        includeSeal: isObjectPayload && signPayload.includeSeal !== undefined ? signPayload.includeSeal : true,
+        placement: (isObjectPayload && signPayload.placement) ? signPayload.placement : 'bottom-right',
+        targetPages: (isObjectPayload && signPayload.targetPages) ? signPayload.targetPages : 'last',
+      };
+
+      const signedPdfBytes = await stampSignatureOnPdf(fileSource, stampOptions);
       const signedFileName = `signed_${task.quoteFileName || 'quotation.pdf'}`;
       const saveRes = await saveFileToStore(signedPdfBytes, signedFileName, 'application/pdf');
 
       const updatedTimeline = appendTimelineEvent(task.timeline, {
         type: 'signed',
-        by: 'เจ้าหน้าที่',
-        note: 'ตรวจรับและเซ็นต์อนุมัติใบเสนอราคาเรียบร้อย'
+        by: signerName,
+        note: `ตรวจรับและเซ็นต์อนุมัติใบเสนอราคาเรียบร้อย (${signerRole})`
       });
 
       const updatedData = {
@@ -856,6 +819,8 @@ export default function App() {
         signedFileName: saveRes.fileName,
         signedFileSize: saveRes.fileSize,
         signedAt: Date.now(),
+        signedBy: signerName,
+        signerRole: signerRole,
         status: 'อนุมัติใบเสนอราคาแล้ว',
         statusUpdatedAt: Date.now(),
         timeline: updatedTimeline
@@ -874,6 +839,7 @@ export default function App() {
       alert("เกิดข้อผิดพลาดในการประทับตราลายเซ็น: " + err.message);
     }
   };
+
 
   const handleConfirmTaskOrder = async (task, { file, taskNo, startDate, endDate }) => {
     try {
@@ -1815,13 +1781,22 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
   const [hasDrawn, setHasDrawn] = useState(false);
   const [uploadedImage, setUploadedImage] = useState(null);
   const [uploadedImageName, setUploadedImageName] = useState('');
+  const [currentSigPreview, setCurrentSigPreview] = useState('');
   const [signing, setSigning] = useState(false);
+
+  // Signer & Placement Settings
+  const [signerName, setSignerName] = useState('เจ้าหน้าที่โครงการ');
+  const [signerRole, setSignerRole] = useState('ผู้ตรวจรับงาน / วิศวกรโครงการ');
+  const [placement, setPlacement] = useState('bottom-right');
+  const [targetPages, setTargetPages] = useState('last');
+  const [includeSeal, setIncludeSeal] = useState(true);
 
   useEffect(() => {
     if (!isOpen) return;
     setHasDrawn(false);
     setUploadedImage(null);
     setUploadedImageName('');
+    setCurrentSigPreview('');
     setSignMode('draw');
     const timer = setTimeout(() => {
       const canvas = canvasRef.current;
@@ -1878,6 +1853,10 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
     if (!isDrawing) return;
     setIsDrawing(false);
     try { e.target.releasePointerCapture(e.pointerId); } catch {}
+    const canvas = canvasRef.current;
+    if (canvas) {
+      setCurrentSigPreview(canvas.toDataURL('image/png'));
+    }
   };
 
   const clearSignature = () => {
@@ -1887,6 +1866,7 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
     const rect = canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, rect.width, rect.height);
     setHasDrawn(false);
+    setCurrentSigPreview('');
   };
 
   const handleImageFileChange = async (e) => {
@@ -1896,6 +1876,7 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
       try {
         const pngDataUrl = await convertImageToPngDataUrl(file);
         setUploadedImage(pngDataUrl);
+        setCurrentSigPreview(pngDataUrl);
       } catch (err) {
         alert("ไม่สามารถอ่านรูปภาพได้: " + err.message);
       }
@@ -1923,7 +1904,14 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
         finalSignatureDataUrl = uploadedImage;
       }
 
-      await onConfirm(task, finalSignatureDataUrl);
+      await onConfirm(task, {
+        signatureDataUrl: finalSignatureDataUrl,
+        signerName: signerName.trim() || 'เจ้าหน้าที่โครงการ',
+        signerRole: signerRole.trim() || 'ผู้ตรวจรับงาน',
+        placement,
+        targetPages,
+        includeSeal,
+      });
       onClose();
     } catch (err) {
       console.error("Signature error:", err);
@@ -1937,13 +1925,13 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-      <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-2xl border border-indigo-100 w-full max-w-lg text-left relative">
+      <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-2xl border border-indigo-100 w-full max-w-2xl text-left relative max-h-[92vh] overflow-y-auto">
         <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
         <div className="flex items-center space-x-3 mb-4">
           <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shrink-0"><PenTool size={22}/></div>
           <div>
             <h3 className="font-bold text-lg text-gray-900">ตรวจรับและเซ็นต์อนุมัติใบเสนอราคา</h3>
-            <p className="text-xs text-gray-400">ใบงาน #{task.taskNo} ({task.company})</p>
+            <p className="text-xs text-gray-400">ใบงาน #{task.taskNo} ({task.company}) • ระบบประทับตราดิจิทัลมาตรฐาน LH</p>
           </div>
         </div>
 
@@ -1951,7 +1939,15 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
         <div className="flex bg-indigo-50/70 p-1 rounded-2xl mb-4 border border-indigo-100">
           <button
             type="button"
-            onClick={() => setSignMode('draw')}
+            onClick={() => {
+              setSignMode('draw');
+              const canvas = canvasRef.current;
+              if (canvas && hasDrawn) {
+                setCurrentSigPreview(canvas.toDataURL('image/png'));
+              } else {
+                setCurrentSigPreview('');
+              }
+            }}
             className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all ${signMode === 'draw' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-indigo-600'}`}
           >
             <PenTool size={14} />
@@ -1959,7 +1955,14 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
           </button>
           <button
             type="button"
-            onClick={() => setSignMode('image')}
+            onClick={() => {
+              setSignMode('image');
+              if (uploadedImage) {
+                setCurrentSigPreview(uploadedImage);
+              } else {
+                setCurrentSigPreview('');
+              }
+            }}
             className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all ${signMode === 'image' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-indigo-600'}`}
           >
             <ImageIcon size={14} />
@@ -1974,7 +1977,7 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
               <button onClick={clearSignature} type="button" className="text-red-500 hover:underline flex items-center gap-1"><RotateCcw size={12}/> ล้างลายเซ็น</button>
             </div>
 
-            <div className="relative border-2 border-dashed border-indigo-200 rounded-2xl bg-indigo-50/20 overflow-hidden touch-none h-48 flex items-center justify-center">
+            <div className="relative border-2 border-dashed border-indigo-200 rounded-2xl bg-indigo-50/20 overflow-hidden touch-none h-40 flex items-center justify-center">
               <canvas
                 ref={canvasRef}
                 className="w-full h-full cursor-crosshair"
@@ -1990,21 +1993,20 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
                 </div>
               )}
             </div>
-            <p className="text-[11px] text-gray-400">ระบบจะทำการ Stamp ลายเซ็นต์ลงในหน้าสุดท้ายของใบเสนอราคา PDF (Fixed Zone) พร้อมบันทึกหลักฐานการอนุมัติ</p>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="flex justify-between items-center text-xs font-bold text-gray-500">
               <span>เลือกไฟล์รูปภาพลายเซ็นต์ทางการ</span>
               {uploadedImage && (
-                <button onClick={() => { setUploadedImage(null); setUploadedImageName(''); }} type="button" className="text-red-500 hover:underline flex items-center gap-1">
+                <button onClick={() => { setUploadedImage(null); setUploadedImageName(''); setCurrentSigPreview(''); }} type="button" className="text-red-500 hover:underline flex items-center gap-1">
                   <RotateCcw size={12}/> เปลี่ยนรูปภาพ
                 </button>
               )}
             </div>
 
             {!uploadedImage ? (
-              <label className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 rounded-2xl bg-indigo-50/20 hover:bg-indigo-50/40 p-6 flex flex-col items-center justify-center cursor-pointer transition-all h-48 text-center">
+              <label className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 rounded-2xl bg-indigo-50/20 hover:bg-indigo-50/40 p-6 flex flex-col items-center justify-center cursor-pointer transition-all h-40 text-center">
                 <ImageIcon size={32} className="text-indigo-400 mb-2 opacity-80" />
                 <span className="text-xs font-bold text-indigo-700">คลิกเพื่อเลือกไฟล์รูปลายเซ็นต์</span>
                 <span className="text-[10px] text-gray-400 mt-1">รองรับ PNG (แนะนำพื้นหลังโปร่งแสง), JPG, JPEG, WebP</span>
@@ -2016,31 +2018,164 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
                 />
               </label>
             ) : (
-              <div className="border border-indigo-200 rounded-2xl bg-indigo-50/10 p-4 flex flex-col items-center justify-center h-48 relative">
+              <div className="border border-indigo-200 rounded-2xl bg-indigo-50/10 p-3 flex flex-col items-center justify-center h-40 relative">
                 <img
                   src={uploadedImage}
                   alt="ลายเซ็นต์ที่แนบ"
-                  className="max-h-36 max-w-full object-contain filter drop-shadow-sm"
+                  className="max-h-28 max-w-full object-contain filter drop-shadow-sm"
                 />
                 <span className="absolute bottom-2 left-3 right-3 text-[10px] font-mono text-gray-500 text-center truncate">
                   ✓ {uploadedImageName || 'รูปลายเซ็นต์พร้อมใช้งาน'}
                 </span>
               </div>
             )}
-            <p className="text-[11px] text-gray-400">รูปภาพจะถูกปรับขนาดและสแตมป์ลงในกล่องอนุมัติ (Fixed Zone) หน้าสุดท้ายของ PDF อัตโนมัติ</p>
           </div>
         )}
 
-        <div className="flex gap-2 pt-4">
+        {/* Signer Details & Placement Configuration */}
+        <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+          <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+            <Sparkles size={14} className="text-indigo-600"/> การตั้งค่าข้อมูลผู้ตรวจรับ & ตราประทับ
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label className="font-semibold text-gray-600 block mb-1 flex items-center gap-1">
+                <User size={13} className="text-indigo-500"/> ชื่อผู้ลงนาม / ตรวจรับ
+              </label>
+              <input
+                type="text"
+                value={signerName}
+                onChange={(e) => setSignerName(e.target.value)}
+                placeholder="ชื่อ-นามสกุล ผู้ลงนาม"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 text-xs bg-white"
+              />
+            </div>
+            <div>
+              <label className="font-semibold text-gray-600 block mb-1 flex items-center gap-1">
+                <Briefcase size={13} className="text-indigo-500"/> ตำแหน่ง
+              </label>
+              <input
+                type="text"
+                value={signerRole}
+                onChange={(e) => setSignerRole(e.target.value)}
+                placeholder="ตำแหน่ง เช่น วิศวกรโครงการ / จัดซื้อ"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 text-xs bg-white"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+            <div>
+              <label className="font-semibold text-gray-600 block mb-1">ตำแหน่งบนหน้า PDF</label>
+              <select
+                value={placement}
+                onChange={(e) => setPlacement(e.target.value)}
+                className="w-full px-2.5 py-2 border border-gray-200 rounded-xl bg-white text-xs"
+              >
+                <option value="bottom-right">มุมขวาล่าง (แนะนำ)</option>
+                <option value="bottom-left">มุมซ้ายล่าง</option>
+                <option value="top-right">มุมขวาบน</option>
+              </select>
+            </div>
+            <div>
+              <label className="font-semibold text-gray-600 block mb-1">หน้าที่ประทับตรา</label>
+              <select
+                value={targetPages}
+                onChange={(e) => setTargetPages(e.target.value)}
+                className="w-full px-2.5 py-2 border border-gray-200 rounded-xl bg-white text-xs"
+              >
+                <option value="last">หน้าสุดท้าย (แนะนำ)</option>
+                <option value="first">หน้าแรก</option>
+                <option value="all">ทุกหน้า</option>
+              </select>
+            </div>
+            <div className="flex items-center sm:pt-5">
+              <label className="flex items-center space-x-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={includeSeal}
+                  onChange={(e) => setIncludeSeal(e.target.checked)}
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                />
+                <span className="font-semibold text-gray-700 text-xs">ตราประทับ LH V-Track</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Live Badge Preview Card */}
+        <div className="mt-4 p-3 bg-indigo-50/40 border border-indigo-100 rounded-2xl">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold text-indigo-900 flex items-center gap-1.5">
+              <Eye size={13} className="text-indigo-600" /> ตัวอย่างตราประทับจริงที่จะประทับลงบนเอกสาร PDF
+            </span>
+            <span className="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-2.5 py-0.5 rounded-full">
+              {placement === 'bottom-right' ? 'มุมขวาล่าง' : placement === 'bottom-left' ? 'มุมซ้ายล่าง' : 'มุมขวาบน'} • {targetPages === 'last' ? 'หน้าสุดท้าย' : targetPages === 'first' ? 'หน้าแรก' : 'ทุกหน้า'}
+            </span>
+          </div>
+
+          <div className="bg-white border-2 border-blue-900 rounded-xl overflow-hidden shadow-sm text-left">
+            <div className="bg-blue-900 text-white px-3 py-1.5 flex items-center justify-between">
+              <span className="text-xs font-bold flex items-center gap-1">
+                ✓ อนุมัติใบเสนอราคา (APPROVED QUOTATION)
+              </span>
+              <span className="text-[10px] text-blue-200 font-mono">
+                JOB #{task.taskNo}
+              </span>
+            </div>
+
+            <div className="p-3 grid grid-cols-12 gap-3 items-center">
+              <div className="col-span-7 space-y-1 text-[11px]">
+                <div className="flex">
+                  <span className="text-gray-400 w-24 shrink-0">ผู้ตรวจรับ:</span>
+                  <span className="font-bold text-gray-900 truncate">{signerName || 'เจ้าหน้าที่โครงการ'}</span>
+                </div>
+                <div className="flex">
+                  <span className="text-gray-400 w-24 shrink-0">ตำแหน่ง:</span>
+                  <span className="font-medium text-gray-700 truncate">{signerRole || 'ผู้ตรวจรับงาน'}</span>
+                </div>
+                <div className="flex">
+                  <span className="text-gray-400 w-24 shrink-0">วันที่อนุมัติ:</span>
+                  <span className="font-bold text-blue-900">
+                    {new Date().toLocaleDateString('th-TH')}
+                  </span>
+                </div>
+                <div className="text-[9px] text-gray-400 font-mono pt-1">
+                  SECURITY VERIFIED • DIGITAL AUDIT TRAIL LOCK
+                </div>
+              </div>
+
+              <div className="col-span-5 bg-slate-50 border border-dashed border-slate-300 rounded-lg p-2 flex flex-col items-center justify-center relative min-h-[75px]">
+                {includeSeal && (
+                  <div className="absolute top-1 right-1 border-2 border-red-500/40 rounded-full w-10 h-10 flex flex-col items-center justify-center text-red-600/75 text-[6px] font-bold leading-none pointer-events-none rotate-[-8deg]">
+                    <span>LH V-TRACK</span>
+                    <span className="text-[7px]">ตรวจรับ</span>
+                  </div>
+                )}
+                {currentSigPreview ? (
+                  <img src={currentSigPreview} alt="Signature Preview" className="max-h-12 max-w-full object-contain filter drop-shadow-sm" />
+                ) : (
+                  <span className="text-[11px] text-gray-300 italic">(ลายเซ็นต์)</span>
+                )}
+                <div className="w-full border-t border-slate-200 mt-1 text-[9px] text-gray-400 text-center">
+                  (ลายมือชื่อผู้ตรวจรับ)
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-5">
           <button type="button" onClick={onClose} disabled={signing} className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-gray-100 text-gray-600 hover:bg-gray-200">ยกเลิก</button>
           <button 
             type="button" 
             onClick={handleConfirm} 
             disabled={!canConfirm || signing} 
-            className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center space-x-1.5"
+            className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center space-x-1.5 shadow-lg shadow-indigo-200"
           >
             {signing ? <span className="animate-spin mr-1">⏳</span> : <ShieldCheck size={16}/>}
-            <span>{signing ? 'กำลังประทับลง PDF...' : 'ยืนยันและเซ็นต์อนุมัติ'}</span>
+            <span>{signing ? 'กำลังประทับตราลง PDF...' : 'ยืนยันและประทับตราอนุมัติ'}</span>
           </button>
         </div>
       </div>
@@ -3280,29 +3415,98 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
 
   const [filterProj, setFilterProj] = useState('');
   const [filterComp, setFilterComp] = useState('');
+  const [quickFilter, setQuickFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredTasks = useMemo(() => {
+  // 1. Base filter by month, project, and company
+  const baseFilteredTasks = useMemo(() => {
     return tasks.filter(t => {
       const tMonth = getEffectiveMonth(t);
-      return !t.isDeleted && tMonth === selectedMonth && (filterProj ? t.project === filterProj : true) && (filterComp ? t.company === filterComp : true);
+      return !t.isDeleted && tMonth === selectedMonth && 
+        (filterProj ? t.project === filterProj : true) && 
+        (filterComp ? t.company === filterComp : true);
     });
   }, [tasks, selectedMonth, filterProj, filterComp]);
 
+  // 2. Secondary filter by quick status pill & search term
+  const finalFilteredTasks = useMemo(() => {
+    return baseFilteredTasks.filter(t => {
+      // Quick filter logic
+      if (quickFilter === 'pending') {
+        const isPending = t.status === 'รอใบเสนอราคา' || t.status === 'อยู่ระหว่างตรวจสอบใบเสนอราคา';
+        if (!isPending) return false;
+      } else if (quickFilter === 'signed') {
+        const isSigned = !!t.signedFileUrl || t.status === 'อนุมัติใบเสนอราคาแล้ว' || t.status === 'เปิดใบงานแล้ว';
+        if (!isSigned) return false;
+      } else if (quickFilter === 'tobill') {
+        const isToBill = t.status === 'จบงานและรอรับเอกสารวางบิล' || t.status === 'ได้รับเอกสารวางบิลแล้ว';
+        if (!isToBill) return false;
+      } else if (quickFilter === 'disbursed') {
+        if (t.status !== 'ส่งเอกสารเบิกจ่ายแล้ว') return false;
+      } else if (quickFilter === 'overdue') {
+        if (!isOverdue(t) && !isScheduleOverdue(t)) return false;
+      }
+
+      // Keyword search
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase();
+        const matchTask = t.taskNo && t.taskNo.toLowerCase().includes(term);
+        const matchComp = t.company && t.company.toLowerCase().includes(term);
+        const matchProj = t.project && t.project.toLowerCase().includes(term);
+        const matchArea = t.area && t.area.toLowerCase().includes(term);
+        return matchTask || matchComp || matchProj || matchArea;
+      }
+
+      return true;
+    });
+  }, [baseFilteredTasks, quickFilter, searchTerm]);
+
+  // Executive KPI Aggregations
+  const totalTasksCount = baseFilteredTasks.length;
+  const pendingQuotesCount = useMemo(() => {
+    return baseFilteredTasks.filter(t => t.status === 'รอใบเสนอราคา' || t.status === 'อยู่ระหว่างตรวจสอบใบเสนอราคา').length;
+  }, [baseFilteredTasks]);
+
+  const signedQuotesCount = useMemo(() => {
+    return baseFilteredTasks.filter(t => t.signedFileUrl || t.status === 'อนุมัติใบเสนอราคาแล้ว' || t.status === 'เปิดใบงานแล้ว').length;
+  }, [baseFilteredTasks]);
+
+  const disbursedCount = useMemo(() => {
+    return baseFilteredTasks.filter(t => t.status === 'ส่งเอกสารเบิกจ่ายแล้ว').length;
+  }, [baseFilteredTasks]);
+
+  const overdueCount = useMemo(() => {
+    return baseFilteredTasks.filter(t => isOverdue(t) || isScheduleOverdue(t)).length;
+  }, [baseFilteredTasks]);
+
+  const toBillCount = useMemo(() => {
+    return baseFilteredTasks.filter(t => t.status === 'จบงานและรอรับเอกสารวางบิล' || t.status === 'ได้รับเอกสารวางบิลแล้ว').length;
+  }, [baseFilteredTasks]);
+
+  const totalMonthBudget = useMemo(() => {
+    return baseFilteredTasks.reduce((acc, t) => {
+      if (!t.cost) return acc;
+      const num = parseFloat(String(t.cost).replace(/,/g, ''));
+      return isNaN(num) ? acc : acc + num;
+    }, 0);
+  }, [baseFilteredTasks]);
+
+  // Status statistics for Donut chart and spec matrix
   const stats = STATUSES.map(s => {
-    const count = filteredTasks.filter(t => t.status === s.name).length;
-    const percent = filteredTasks.length > 0 ? Math.round((count / filteredTasks.length) * 100) : 0;
+    const count = baseFilteredTasks.filter(t => t.status === s.name).length;
+    const percent = baseFilteredTasks.length > 0 ? Math.round((count / baseFilteredTasks.length) * 100) : 0;
     return { ...s, count, percent };
   });
 
   let cumulativePercent = 0;
   const conicStops = stats.filter(s => s.count > 0).map(s => {
     const start = cumulativePercent;
-    const slicePercent = (s.count / filteredTasks.length) * 100;
+    const slicePercent = (s.count / baseFilteredTasks.length) * 100;
     cumulativePercent += slicePercent;
     return `${s.color} ${start}% ${cumulativePercent}%`;
   }).join(', ');
   
-  const pieStyle = filteredTasks.length > 0 ? { background: `conic-gradient(${conicStops})` } : { background: '#F0ECE1' };
+  const pieStyle = baseFilteredTasks.length > 0 ? { background: `conic-gradient(${conicStops})` } : { background: '#F0ECE1' };
 
   const selectedMonthFormatted = useMemo(() => {
     try {
@@ -3312,104 +3516,350 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
     }
   }, [selectedMonth]);
 
+  const todayThaiFormatted = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat('th-TH', { dateStyle: 'full' }).format(new Date());
+    } catch {
+      return '';
+    }
+  }, []);
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-700">
-      {/* 80s Architectural Drafting Filter Bar */}
-      <div className="asym-card p-6 md:p-7 border border-[#E2DDD1] shadow-sm relative overflow-hidden bg-white">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-drafting-grid opacity-20 pointer-events-none"></div>
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-1">
-            <div className="flex items-center space-x-2">
-              <span className="tech-stamp">PROJECT DISPATCH & OPERATIONS OVERVIEW</span>
+    <div className="space-y-6 animate-in fade-in duration-500 text-left">
+      {/* ============================================================== */}
+      {/* 🏛️ 1. EXECUTIVE GRAND MASTHEAD: LANDING HERO (LH × 90s ATELIER) */}
+      {/* ============================================================== */}
+      <div className="relative rounded-[24px] bg-gradient-to-br from-[#002447] via-[#003C71] to-[#0A2540] text-white p-6 md:p-8 shadow-xl border border-[#B08731]/40 overflow-hidden">
+        {/* Architectural Drafting Grid Overlay & Flowing Gold Line */}
+        <div className="absolute inset-0 bg-drafting-grid opacity-15 pointer-events-none"></div>
+        <svg className="absolute -top-16 -right-16 w-80 h-80 pointer-events-none opacity-25" viewBox="0 0 200 200">
+          <path d="M 0,100 C 60,10 140,190 200,100" stroke="#B08731" strokeWidth="1.2" fill="none" className="animate-wave-flow" />
+          <circle cx="100" cy="100" r="70" stroke="#B08731" strokeWidth="0.6" strokeDasharray="4 4" fill="none" />
+        </svg>
+
+        {/* Top Header Row */}
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-[#B08731]/25">
+          {/* Brand Monogram & Title */}
+          <div className="flex items-start space-x-4">
+            <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-b from-[#001c37] to-[#001429] border-2 border-[#B08731] flex flex-col items-center justify-center shrink-0 shadow-lg relative group">
+              <span className="font-serif-luxury font-black text-xl md:text-2xl text-[#B08731] tracking-wider leading-none">LH</span>
+              <span className="text-[7px] font-mono-tech text-white/70 tracking-widest uppercase mt-0.5">EST.1983</span>
+              <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-[#B08731] rounded-full border border-white/40 flex items-center justify-center">
+                <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></div>
+              </div>
             </div>
-            <h3 className="font-serif-luxury text-2xl md:text-3xl font-bold text-[#002447] tracking-tight">
-              ภาพรวมการดำเนินงาน V-TRACK
-            </h3>
-            <p className="text-xs text-[#8C7B63] font-medium flex items-center gap-1.5">
-              <span>งวดข้อมูล:</span>
-              <span className="font-bold text-[#002447]">{selectedMonthFormatted}</span>
-              <span className="text-gray-300">•</span>
-              <span>พบทั้งหมด <strong className="text-[#C5A059] font-mono-tech">{filteredTasks.length}</strong> รายการ</span>
-            </p>
+
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] font-mono-tech tracking-[0.2em] text-[#B08731] bg-[#B08731]/15 px-2.5 py-0.5 rounded border border-[#B08731]/40 uppercase font-semibold">
+                  ⌖ LAND & HOUSES • EXECUTIVE COMMAND
+                </span>
+                <span className="text-[10px] font-mono-tech text-white/50">
+                  SYS_REF: LH-VT90
+                </span>
+              </div>
+              <h2 className="font-serif-luxury text-2xl md:text-3xl lg:text-4xl font-bold text-white tracking-tight leading-tight">
+                V-TRACK <span className="text-[#B08731] font-normal italic">Operations Hub</span>
+              </h2>
+              <p className="text-xs md:text-sm text-slate-300 font-normal max-w-2xl">
+                ศูนย์บัญชาการติดตามงานก่อสร้าง ตรวจรับใบเสนอราคาอิเล็กทรอนิกส์ และบริหารการเบิกจ่ายโครงการคุณภาพ
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 shrink-0 lg:w-[620px]">
-            <div className="space-y-1">
-              <label className="text-[10px] font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
-                <CalendarDays size={12} className="mr-1 text-[#C5A059]"/> [ 01. PERIOD ]
-              </label>
-              <select 
-                value={selectedMonth} 
-                onChange={e => setSelectedMonth(e.target.value)} 
-                className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447] transition-all"
-              >
-                {availableMonths.map(m => (
-                  <option key={m} value={m}>
-                    {new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}
-                  </option>
-                ))}
-              </select>
+          {/* Right Telemetry & Period */}
+          <div className="flex flex-col sm:flex-row lg:flex-col items-start lg:items-end justify-between gap-2">
+            <div className="inline-flex items-center space-x-2 bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-white/15">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+              <span className="text-xs font-mono-tech text-white/90">
+                งวดบัญชี: <strong className="text-[#DFBE77]">{selectedMonthFormatted}</strong>
+              </span>
             </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
-                <Filter size={12} className="mr-1 text-[#C5A059]"/> [ 02. ESTATE ]
-              </label>
-              <select 
-                value={filterProj} 
-                onChange={e => setFilterProj(e.target.value)} 
-                className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447] transition-all"
-              >
-                <option value="">ทุกโครงการ</option>
-                {settings.projects.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+            <div className="text-[11px] text-slate-300 font-medium flex items-center gap-2">
+              <span>{todayThaiFormatted}</span>
+              <span className="text-slate-500">•</span>
+              <span className="text-[#B08731] font-mono-tech font-bold">{totalTasksCount} รายการในระบบ</span>
             </div>
+          </div>
+        </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
-                <Filter size={12} className="mr-1 text-[#C5A059]"/> [ 03. VENDOR ]
-              </label>
-              <select 
-                value={filterComp} 
-                onChange={e => setFilterComp(e.target.value)} 
-                className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447] transition-all"
-              >
-                <option value="">ทุกร้านค้า</option>
-                {settings.companies.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+        {/* 90s Architectural Executive Metric Deck (Asymmetric Triptych + Financial Ribbon) */}
+        <div className="relative z-10 grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 pt-6">
+          {/* Card 1: งานทั้งหมดในงวด */}
+          <div className="bg-[#001F3F]/60 backdrop-blur-md border border-[#B08731]/30 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-[#B08731] transition-all">
+            <div className="flex items-center justify-between text-[10px] font-mono-tech text-[#B08731] tracking-wider uppercase mb-1">
+              <span>[ 01. ACTIVE ORDERS ]</span>
+              <span>⌖</span>
+            </div>
+            <div className="text-2xl md:text-3xl font-serif-luxury font-bold text-white tracking-tight">
+              {totalTasksCount} <span className="text-xs font-sans font-normal text-slate-300">ใบงาน</span>
+            </div>
+            <div className="mt-2 pt-2 border-t border-white/10 text-[11px] text-slate-300 flex items-center justify-between">
+              <span>โครงการทั้งหมด</span>
+              <span className="font-mono-tech text-white font-bold">{settings.projects.length}</span>
+            </div>
+          </div>
+
+          {/* Card 2: เซ็นต์อนุมัติแล้ว */}
+          <div className="bg-[#001F3F]/60 backdrop-blur-md border border-emerald-500/30 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-emerald-400 transition-all">
+            <div className="flex items-center justify-between text-[10px] font-mono-tech text-emerald-400 tracking-wider uppercase mb-1">
+              <span>[ 02. VERIFIED & SIGNED ]</span>
+              <ShieldCheck size={14} className="text-emerald-400" />
+            </div>
+            <div className="text-2xl md:text-3xl font-serif-luxury font-bold text-emerald-300 tracking-tight">
+              {signedQuotesCount} <span className="text-xs font-sans font-normal text-emerald-200">รายการ</span>
+            </div>
+            <div className="mt-2 pt-2 border-t border-white/10 text-[11px] text-slate-300 flex items-center justify-between">
+              <span>สัดส่วนตรวจรับแล้ว</span>
+              <span className="font-mono-tech text-emerald-300 font-bold">
+                {totalTasksCount > 0 ? Math.round((signedQuotesCount / totalTasksCount) * 100) : 0}%
+              </span>
+            </div>
+          </div>
+
+          {/* Card 3: รอตรวจรับ / รอใบเสนอราคา */}
+          <div className="bg-[#001F3F]/60 backdrop-blur-md border border-amber-500/30 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-amber-400 transition-all">
+            <div className="flex items-center justify-between text-[10px] font-mono-tech text-amber-400 tracking-wider uppercase mb-1">
+              <span>[ 03. PENDING REVIEW ]</span>
+              <Clock size={14} className="text-amber-400" />
+            </div>
+            <div className="text-2xl md:text-3xl font-serif-luxury font-bold text-amber-300 tracking-tight">
+              {pendingQuotesCount} <span className="text-xs font-sans font-normal text-amber-200">รายการ</span>
+            </div>
+            <div className="mt-2 pt-2 border-t border-white/10 text-[11px] text-slate-300 flex items-center justify-between">
+              <span>รอเจ้าหน้าที่อนุมัติ</span>
+              <span className="font-mono-tech text-amber-300 font-bold">Action Required</span>
+            </div>
+          </div>
+
+          {/* Card 4: มูลค่าเบิกจ่ายรวมในงวด */}
+          <div className="bg-[#001F3F]/60 backdrop-blur-md border border-[#B08731]/40 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-[#DFBE77] transition-all">
+            <div className="flex items-center justify-between text-[10px] font-mono-tech text-[#DFBE77] tracking-wider uppercase mb-1">
+              <span>[ 04. DISBURSEMENT PIPELINE ]</span>
+              <DollarSign size={14} className="text-[#DFBE77]" />
+            </div>
+            <div className="text-xl md:text-2xl font-serif-luxury font-bold text-[#DFBE77] tracking-tight truncate">
+              ฿ {totalMonthBudget.toLocaleString()}
+            </div>
+            <div className="mt-2 pt-2 border-t border-white/10 text-[11px] text-slate-300 flex items-center justify-between">
+              <span>ส่งเบิกจ่ายแล้ว</span>
+              <span className="font-mono-tech text-emerald-300 font-bold">{disbursedCount} งาน</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Asymmetric 5:7 Layout Split (Status Spec Matrix vs Task Stream) */}
+      {/* ============================================================== */}
+      {/* 🧭 2. TACTILE CONSOLE & ARCHITECTURAL FILTER BAR               */}
+      {/* ============================================================== */}
+      <div className="asym-card p-5 md:p-6 border border-[#E2DDD1] shadow-sm bg-white relative overflow-hidden space-y-4">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-drafting-grid opacity-15 pointer-events-none"></div>
+
+        {/* Top Dropdowns: Period, Estate, Contractor + Search */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 relative z-10">
+          {/* Period Selector */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
+              <CalendarDays size={12} className="mr-1 text-[#B08731]"/> [ 01. PERIOD ]
+            </label>
+            <select 
+              value={selectedMonth} 
+              onChange={e => setSelectedMonth(e.target.value)} 
+              className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#B08731] focus:ring-1 focus:ring-[#B08731] text-xs font-semibold text-[#002447] transition-all"
+            >
+              {availableMonths.map(m => (
+                <option key={m} value={m}>
+                  {new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Project / Estate Selector */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
+              <Building2 size={12} className="mr-1 text-[#B08731]"/> [ 02. ESTATE ]
+            </label>
+            <select 
+              value={filterProj} 
+              onChange={e => setFilterProj(e.target.value)} 
+              className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#B08731] focus:ring-1 focus:ring-[#B08731] text-xs font-semibold text-[#002447] transition-all"
+            >
+              <option value="">ทุกโครงการ Land & Houses</option>
+              {settings.projects.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+
+          {/* Vendor / Contractor Selector */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
+              <Briefcase size={12} className="mr-1 text-[#B08731]"/> [ 03. VENDOR ]
+            </label>
+            <select 
+              value={filterComp} 
+              onChange={e => setFilterComp(e.target.value)} 
+              className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#B08731] focus:ring-1 focus:ring-[#B08731] text-xs font-semibold text-[#002447] transition-all"
+            >
+              <option value="">ทุกร้านค้า / ผู้รับเหมา</option>
+              {settings.companies.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
+          {/* Keyword Search */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
+              <Search size={12} className="mr-1 text-[#B08731]"/> [ 04. SEARCH ]
+            </label>
+            <div className="relative">
+              <input 
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="ค้นหาเลขใบงาน, ร้านค้า, พื้นที่..."
+                className="w-full p-2.5 pl-8 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] focus:border-[#B08731] focus:ring-1 focus:ring-[#B08731] text-xs font-medium text-[#002447] placeholder:text-gray-400 transition-all"
+              />
+              <Search size={13} className="absolute left-2.5 top-3 text-gray-400 pointer-events-none" />
+              {searchTerm && (
+                <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-3 text-gray-400 hover:text-gray-600">
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Filter Status Switcher Pills (90s Hi-Fi Console Buttons) */}
+        <div className="pt-2 border-t border-[#E2DDD1]/70 flex flex-wrap items-center justify-between gap-2 relative z-10">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-mono-tech text-[#8C7B63] uppercase mr-1 flex items-center">
+              <Filter size={11} className="mr-1 text-[#B08731]" /> กรองด่วน:
+            </span>
+
+            <button
+              onClick={() => setQuickFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                quickFilter === 'all' 
+                  ? 'bg-[#002447] text-white shadow-xs' 
+                  : 'bg-[#FAF8F5] text-gray-600 hover:bg-gray-100 border border-[#E2DDD1]'
+              }`}
+            >
+              <span>ทั้งหมด</span>
+              <span className="text-[10px] font-mono-tech opacity-80">({totalTasksCount})</span>
+            </button>
+
+            <button
+              onClick={() => setQuickFilter('pending')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                quickFilter === 'pending' 
+                  ? 'bg-amber-600 text-white shadow-xs' 
+                  : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
+              }`}
+            >
+              <Clock size={12} />
+              <span>รอตรวจรับ</span>
+              <span className="text-[10px] font-mono-tech opacity-80">({pendingQuotesCount})</span>
+            </button>
+
+            <button
+              onClick={() => setQuickFilter('signed')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                quickFilter === 'signed' 
+                  ? 'bg-emerald-700 text-white shadow-xs' 
+                  : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+              }`}
+            >
+              <ShieldCheck size={12} />
+              <span>เซ็นต์อนุมัติแล้ว</span>
+              <span className="text-[10px] font-mono-tech opacity-80">({signedQuotesCount})</span>
+            </button>
+
+            <button
+              onClick={() => setQuickFilter('tobill')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                quickFilter === 'tobill' 
+                  ? 'bg-orange-600 text-white shadow-xs' 
+                  : 'bg-orange-50 text-orange-800 hover:bg-orange-100 border border-orange-200'
+              }`}
+            >
+              <AlertCircle size={12} />
+              <span>รอวางบิล</span>
+              <span className="text-[10px] font-mono-tech opacity-80">({toBillCount})</span>
+            </button>
+
+            <button
+              onClick={() => setQuickFilter('disbursed')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                quickFilter === 'disbursed' 
+                  ? 'bg-indigo-700 text-white shadow-xs' 
+                  : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-100 border border-indigo-200'
+              }`}
+            >
+              <DollarSign size={12} />
+              <span>เบิกจ่ายแล้ว</span>
+              <span className="text-[10px] font-mono-tech opacity-80">({disbursedCount})</span>
+            </button>
+
+            {overdueCount > 0 && (
+              <button
+                onClick={() => setQuickFilter('overdue')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  quickFilter === 'overdue' 
+                    ? 'bg-red-700 text-white shadow-xs' 
+                    : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
+                }`}
+              >
+                <span>⚠️ เลยกำหนด</span>
+                <span className="text-[10px] font-mono-tech font-bold">({overdueCount})</span>
+              </button>
+            )}
+          </div>
+
+          {(filterProj || filterComp || quickFilter !== 'all' || searchTerm) && (
+            <button
+              onClick={() => {
+                setFilterProj('');
+                setFilterComp('');
+                setQuickFilter('all');
+                setSearchTerm('');
+              }}
+              className="text-[11px] font-semibold text-[#B08731] hover:underline flex items-center gap-1 py-1"
+            >
+              <RotateCcw size={11} /> ล้างตัวกรองทั้งหมด
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ============================================================== */}
+      {/* 📊 3. ASYMMETRIC 5:7 SPLIT: TELEMETRY & OPERATIONS DOSSIER     */}
+      {/* ============================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column (5/12 cols): Architectural Status Specification Matrix */}
-        <div className="lg:col-span-5 asym-card p-6 md:p-8 border border-[#E2DDD1] shadow-sm flex flex-col bg-white relative overflow-hidden">
+        {/* Left Column (5/12 cols): Architectural Status Ratio Matrix */}
+        <div className="lg:col-span-5 asym-card p-6 md:p-7 border border-[#E2DDD1] shadow-sm flex flex-col bg-white relative overflow-hidden">
           {/* Subtle Dynamic Ribbon Curve in Card Background */}
           <svg className="absolute -top-10 -right-10 w-60 h-60 pointer-events-none opacity-20" viewBox="0 0 200 200">
-            <path d="M 0,100 C 50,20 150,180 200,100" stroke="#C5A059" strokeWidth="1.5" fill="none" className="animate-wave-flow" />
+            <path d="M 0,100 C 50,20 150,180 200,100" stroke="#B08731" strokeWidth="1.5" fill="none" className="animate-wave-flow" />
           </svg>
 
-          <div className="flex items-center justify-between pb-4 border-b border-[#E2DDD1]/80 mb-6 relative z-10">
+          <div className="flex items-center justify-between pb-4 border-b border-[#E2DDD1]/80 mb-5 relative z-10">
             <div>
               <h4 className="font-serif-luxury font-bold text-lg md:text-xl text-[#002447]">สัดส่วนสถานะงาน</h4>
               <p className="text-[9px] font-mono-tech text-[#8C7B63] tracking-widest uppercase">DISPATCH METRICS & RATIOS</p>
             </div>
             <span className="text-[10px] font-mono-tech text-[#002447] bg-[#FAF8F5] border border-[#E2DDD1] px-2.5 py-1 rounded-md font-bold">
-              ⊕ {filteredTasks.length} TASKS
+              ⊕ {baseFilteredTasks.length} TASKS
             </span>
           </div>
           
-          {/* Donut Chart with Brass Ring Rim */}
-          <div className="relative my-4 mx-auto flex items-center justify-center z-10">
-            <div className="p-3 rounded-full border border-[#C5A059]/40 bg-[#FAF8F5] shadow-inner">
+          {/* Donut Chart with Precision Brass Ring Rim */}
+          <div className="relative my-3 mx-auto flex items-center justify-center z-10">
+            <div className="p-3.5 rounded-full border-2 border-[#B08731]/40 bg-[#FAF8F5] shadow-inner relative">
               <div 
                 className="relative w-44 h-44 rounded-full shadow-md flex items-center justify-center transition-all duration-700" 
                 style={pieStyle}
               >
                 <div className="w-28 h-28 bg-white rounded-full flex flex-col items-center justify-center shadow-sm border border-[#E2DDD1]/80 z-10">
-                  <span className="text-3xl font-serif-luxury font-bold text-[#002447]">{filteredTasks.length}</span>
+                  <span className="text-3xl font-serif-luxury font-bold text-[#002447]">{baseFilteredTasks.length}</span>
                   <span className="text-[9px] font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider mt-0.5">ใบงานรวม</span>
                 </div>
               </div>
@@ -3417,7 +3867,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
           </div>
 
           {/* Architectural Status Specification Table */}
-          <div className="w-full space-y-2 mt-6 relative z-10 border-t border-[#E2DDD1]/60 pt-4">
+          <div className="w-full space-y-2 mt-5 relative z-10 border-t border-[#E2DDD1]/70 pt-4">
             <div className="flex items-center justify-between text-[9px] font-mono-tech text-[#8C7B63] uppercase tracking-wider pb-1">
               <span>สถานะงาน (SPECIFICATION)</span>
               <span>จำนวน / สัดส่วน</span>
@@ -3448,42 +3898,62 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
               );
             })}
           </div>
+
+          {/* Schedule & Disbursement Quick Highlights */}
+          <div className="mt-5 p-3.5 bg-[#FAF8F5] rounded-xl border border-[#E2DDD1] space-y-2 relative z-10 text-xs">
+            <div className="text-[10px] font-mono-tech font-bold text-[#B08731] uppercase tracking-wider flex items-center gap-1">
+              <span>⌖ HIGHLIGHTS</span>
+              <span className="text-gray-400">• สรุปงวดและนัดหมาย</span>
+            </div>
+            <div className="flex items-center justify-between text-gray-700">
+              <span className="text-[11px] text-gray-500">งานที่มีวันทำจ่ายยืนยัน:</span>
+              <span className="font-mono-tech font-bold text-emerald-800">
+                {baseFilteredTasks.filter(t => t.payDate).length} งาน
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-gray-700">
+              <span className="text-[11px] text-gray-500">งานที่มีนัดหมายเข้าทำ:</span>
+              <span className="font-mono-tech font-bold text-[#002447]">
+                {baseFilteredTasks.filter(t => t.startDate || t.aptDate).length} งาน
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Right Column (7/12 cols): Architectural Task Stream */}
         <div className="lg:col-span-7 asym-card-inverse bg-white border border-[#E2DDD1] shadow-sm overflow-hidden flex flex-col">
-          <div className="p-6 md:p-7 border-b border-[#E2DDD1] bg-[#FAF8F5]/50 flex justify-between items-center">
+          <div className="p-5 md:p-6 border-b border-[#E2DDD1] bg-[#FAF8F5]/60 flex justify-between items-center">
             <div className="flex flex-col">
-              <span className="tech-stamp">MONTHLY DISPATCH STREAM</span>
+              <span className="tech-stamp">MONTHLY OPERATIONS STREAM</span>
               <h4 className="font-serif-luxury font-bold text-lg md:text-xl text-[#002447] mt-0.5">
-                รายการใบงานประจำงวด
+                สารบบใบงานประจำงวด
               </h4>
-              <p className="text-xs text-[#C5A059] font-medium">{selectedMonthFormatted}</p>
+              <p className="text-xs text-[#B08731] font-medium">{selectedMonthFormatted}</p>
             </div>
             <div className="flex items-center space-x-2">
-              <span className="text-[10px] font-mono-tech bg-white px-3.5 py-1.5 rounded-md border border-[#E2DDD1] text-[#002447] font-bold shadow-2xs">
-                ⊕ {filteredTasks.length} RECORDS
+              <span className="text-[10px] font-mono-tech bg-white px-3 py-1.5 rounded-md border border-[#E2DDD1] text-[#002447] font-bold shadow-2xs">
+                ⊕ {finalFilteredTasks.length} RECORDS
               </span>
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto max-h-[580px] p-4 md:p-6 custom-scrollbar bg-[#F8F6F0]/40">
-            {filteredTasks.length > 0 ? (
+          <div className="flex-1 overflow-auto max-h-[620px] p-4 md:p-6 custom-scrollbar bg-[#F8F6F0]/40">
+            {finalFilteredTasks.length > 0 ? (
               <div className="flex flex-col gap-3.5">
-                {filteredTasks.map(t => {
+                {finalFilteredTasks.map(t => {
                   const isSchedOver = isScheduleOverdue(t);
                   return (
                     <div 
                       key={t.id} 
                       onClick={() => onViewDetail(t)}
-                      className="group relative p-5 bg-white rounded-xl border border-[#E2DDD1] shadow-2xs hover:shadow-md hover:border-[#C5A059]/60 hover:-translate-y-0.5 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col md:flex-row md:items-center justify-between text-left gap-4"
+                      className="group relative p-5 bg-white rounded-xl border border-[#E2DDD1] shadow-2xs hover:shadow-md hover:border-[#B08731]/70 hover:-translate-y-0.5 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col md:flex-row md:items-center justify-between text-left gap-4"
                     >
                       {/* Flowing Gold Bar on Left edge on Hover */}
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#C5A059] via-[#DFBE77] to-[#002447] opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-[#B08731] via-[#DFBE77] to-[#002447] opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                       
                       <div className="flex flex-col min-w-0 flex-1 pl-2 md:pl-1">
                         <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="font-serif-luxury font-bold text-[#002447] text-lg md:text-xl tracking-tight group-hover:text-[#C5A059] transition-colors">
+                          <span className="font-serif-luxury font-bold text-[#002447] text-lg md:text-xl tracking-tight group-hover:text-[#B08731] transition-colors">
                             {t.taskNo}
                           </span>
                           {isSchedOver && (
@@ -3505,7 +3975,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                         
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-gray-600">
                           <div className="flex items-center space-x-1.5 bg-[#FAF8F5] px-2.5 py-1 rounded-[6px] border border-[#E2DDD1]">
-                            <Briefcase size={12} className="text-[#C5A059]" />
+                            <Briefcase size={12} className="text-[#B08731]" />
                             <span className="text-[10px] font-bold uppercase tracking-wider truncate max-w-[130px] text-[#002447]">{t.company}</span>
                           </div>
                           <div className="flex items-center space-x-1.5 bg-[#FAF8F5] px-2.5 py-1 rounded-[6px] border border-[#E2DDD1]">
@@ -3514,13 +3984,13 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                           </div>
                           {t.startDate && t.endDate ? (
                             <div className="flex items-center space-x-1 bg-[#FAF8F5] px-2.5 py-1 rounded-[6px] border border-[#E2DDD1] text-[10px] font-semibold text-gray-600">
-                              <CalendarDays size={11} className="text-[#C5A059]" />
+                              <CalendarDays size={11} className="text-[#B08731]" />
                               <span>{t.startDate} - {t.endDate}</span>
                             </div>
                           ) : (
                             t.aptDate && (
                               <div className="flex items-center space-x-1 bg-[#FAF8F5] px-2.5 py-1 rounded-[6px] border border-[#E2DDD1] text-[10px] font-semibold text-gray-600">
-                                <CalendarDays size={11} className="text-[#C5A059]" />
+                                <CalendarDays size={11} className="text-[#B08731]" />
                                 <span>{t.aptDate}</span>
                               </div>
                             )
@@ -3535,13 +4005,18 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                             </span>
                           )}
                           {t.signedFileUrl && (
-                            <span className="bg-[#FAF8F5] text-[#3730A3] text-[9px] px-2 py-0.5 rounded-[4px] font-bold flex items-center gap-1 border border-[#C7D2FE] shadow-2xs">
-                              <ShieldCheck size={9} className="text-[#4338CA]"/> เซ็นต์อนุมัติแล้ว
+                            <span className="bg-[#FAF8F5] text-[#1E3A8A] text-[9px] px-2 py-0.5 rounded-[4px] font-bold flex items-center gap-1 border border-[#BFDBFE] shadow-2xs">
+                              <ShieldCheck size={9} className="text-[#1D4ED8]"/> เซ็นต์อนุมัติแล้ว
                             </span>
                           )}
                           {t.taskFileUrl && (
                             <span className="bg-[#FAF8F5] text-[#1E40AF] text-[9px] px-2 py-0.5 rounded-[4px] font-bold flex items-center gap-1 border border-[#BFDBFE] shadow-2xs">
                               <FileText size={9} className="text-[#1D4ED8]"/> มีใบงาน
+                            </span>
+                          )}
+                          {t.payDate && (
+                            <span className="bg-emerald-50 text-emerald-800 text-[9px] px-2 py-0.5 rounded-[4px] font-bold flex items-center gap-1 border border-emerald-200 shadow-2xs font-mono-tech">
+                              <DollarSign size={9} className="text-emerald-600" /> วันทำจ่าย: {t.payDate}
                             </span>
                           )}
                         </div>
@@ -3559,7 +4034,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                           <StatusTag label={t.status} />
                         </div>
                         <div className="flex items-center space-x-1.5 mt-0 md:mt-2 bg-[#FAF8F5] px-2.5 py-1 rounded-md border border-[#E2DDD1]">
-                          <MapPin size={10} className="text-[#C5A059]" />
+                          <MapPin size={10} className="text-[#B08731]" />
                           <span className="text-[10px] text-[#002447] font-bold tracking-wide">{t.area}</span>
                         </div>
                       </div>
@@ -3569,9 +4044,22 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center py-24 text-gray-400">
-                <CalendarDays size={48} className="mb-3 text-[#C5A059]/30"/>
-                <p className="font-serif-luxury text-base font-bold text-[#002447]">ไม่พบข้อมูลใบงานในงวดนี้</p>
+                <CalendarDays size={48} className="mb-3 text-[#B08731]/30"/>
+                <p className="font-serif-luxury text-base font-bold text-[#002447]">ไม่พบข้อมูลใบงานตามเงื่อนไขที่เลือก</p>
                 <p className="text-[10px] font-mono-tech text-gray-400 mt-1 uppercase">NO CORRESPONDING RECORDS FOUND</p>
+                {(filterProj || filterComp || quickFilter !== 'all' || searchTerm) && (
+                  <button
+                    onClick={() => {
+                      setFilterProj('');
+                      setFilterComp('');
+                      setQuickFilter('all');
+                      setSearchTerm('');
+                    }}
+                    className="mt-3 text-xs bg-white text-[#B08731] font-bold px-3 py-1.5 rounded-lg border border-[#E2DDD1] hover:bg-[#FAF8F5]"
+                  >
+                    ล้างตัวกรองเพื่อดูทั้งหมด
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -4,7 +4,7 @@
 
 @layer base {
   body {
-    font-family: 'Plus Jakarta Sans', 'Sarabun', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Noto Sans Thai', 'Plus Jakarta Sans', 'Sarabun', -apple-system, BlinkMacSystemFont, sans-serif;
     background-color: #F8F6F0;
     color: #1E252B;
     overflow-x: hidden;
@@ -19,41 +19,53 @@
   }
 }
 
-/* --- Architectural 80s & Flowing Ribbon Aesthetics --- */
+/* --- Architectural Contemporary & 90s Heritage Fusion (LH Signature) --- */
 
 /* Hairline drafting blueprint grid */
 .bg-drafting-grid {
   background-image: 
-    linear-gradient(to right, rgba(197, 160, 89, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(197, 160, 89, 0.08) 1px, transparent 1px);
-  background-size: 32px 32px;
+    linear-gradient(to right, rgba(176, 135, 49, 0.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(176, 135, 49, 0.07) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
 .bg-dot-matrix {
-  background-image: radial-gradient(rgba(0, 51, 102, 0.12) 1px, transparent 1px);
-  background-size: 20px 20px;
+  background-image: radial-gradient(rgba(0, 60, 113, 0.12) 1px, transparent 1px);
+  background-size: 18px 18px;
 }
 
-/* Asymmetrical Architectural Card */
+/* 90s Precision Drafting Technical Crosshair */
+.drafting-crosshair {
+  position: relative;
+}
+.drafting-crosshair::before {
+  content: "⌖";
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: #B08731;
+  opacity: 0.6;
+}
+
+/* Tactile 90s Architectural Card with Contemporary Luxury finish */
 .asym-card {
-  border-radius: 28px 6px 28px 6px;
+  border-radius: 20px 4px 20px 4px;
   background: #FFFFFF;
-  border: 1px solid rgba(226, 221, 209, 0.9);
-  box-shadow: 0 4px 20px -2px rgba(0, 36, 71, 0.04), 0 2px 6px -1px rgba(197, 160, 89, 0.06);
+  border: 1px solid rgba(226, 221, 209, 0.95);
+  box-shadow: 0 4px 20px -2px rgba(0, 36, 71, 0.04), 0 2px 6px -1px rgba(176, 135, 49, 0.05);
   position: relative;
   transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .asym-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 30px -4px rgba(0, 36, 71, 0.08), 0 4px 12px -1px rgba(197, 160, 89, 0.15);
-  border-color: rgba(197, 160, 89, 0.45);
+  box-shadow: 0 12px 28px -4px rgba(0, 36, 71, 0.08), 0 4px 12px -1px rgba(176, 135, 49, 0.12);
+  border-color: rgba(176, 135, 49, 0.5);
 }
 
 .asym-card-inverse {
-  border-radius: 6px 28px 6px 28px;
+  border-radius: 4px 20px 4px 20px;
   background: #FFFFFF;
-  border: 1px solid rgba(226, 221, 209, 0.9);
+  border: 1px solid rgba(226, 221, 209, 0.95);
   box-shadow: 0 4px 20px -2px rgba(0, 36, 71, 0.04);
   transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }

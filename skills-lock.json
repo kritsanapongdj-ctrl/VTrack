@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "esign-field-placement": {
+      "source": "affaan-m/ecc",
+      "sourceType": "github",
+      "skillPath": "skills/esign-field-placement/SKILL.md",
+      "computedHash": "f61eb6f19c69d86f8f044d0f8df8962df090f46430585b98dba4c4e210b48e0c"
+    },
+    "pdf": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pdf/SKILL.md",
+      "computedHash": "37226d4220d844377e6b2a386c51a011df4cd130855ff0b80bcc22f9c28abd57"
+    },
+    "pdftk-server": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/pdftk-server/SKILL.md",
+      "computedHash": "a56ec988d9fae251b9d913fdf646f770a30474027e5d6e6d3250a83958f21ec3"
+    }
+  }
+}

@@ -1,37 +1,108 @@
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, degrees } from 'pdf-lib';
 
 /**
- * คำนวณพิกัดสำหรับวางตราประทับตามแนวทาง esign-field-placement
- * @param {number} pageWidth - ความกว้างหน้าเอกสาร (Points)
- * @param {number} pageHeight - ความสูงหน้าเอกสาร (Points)
- * @param {number} stampW - ความกว้างของตราประทับ (Points)
- * @param {number} stampH - ความสูงของตราประทับ (Points)
- * @param {string} placement - ตำแหน่ง ('bottom-right' | 'bottom-left' | 'top-right' | 'top-left')
- * @param {number} margin - ระยะห่างจากขอบ (Points, ค่าเริ่มต้น 25)
- * @returns {{ x: number, y: number, width: number, height: number }}
+ * คำนวณพิกัดและมุมหมุนสำหรับวางตราประทับตามแนวทาง esign-field-placement
+ * รองรับการหมุนของหน้า PDF (Page Rotation 0, 90, 180, 270) และ CropBox/MediaBox Offset
+ * @param {Object|number} pageOrWidth - อ็อบเจกต์หน้า PDF (PDFPage) หรือความกว้างของหน้า (Points)
+ * @param {number} [heightOrStampW] - ความสูงของหน้า (กรณีส่งตัวเลข) หรือความกว้างตราประทับ
+ * @param {number} [stampWOrH] - ความกว้างตราประทับ หรือความสูงตราประทับ
+ * @param {number} [stampHOrPlacement] - ความสูงตราประทับ หรือตำแหน่งวาง
+ * @param {string} [placementOption] - ตำแหน่งวาง ('bottom-right' | 'bottom-left' | 'top-right' | 'top-left')
+ * @param {number} [marginOption=20] - ระยะห่างจากขอบ (Points, ค่าเริ่มต้น 20)
+ * @returns {{ x: number, y: number, width: number, height: number, rotate: any, rotateAngle: number }}
  */
-export const calculateStampCoordinates = (pageWidth, pageHeight, stampW, stampH, placement = 'bottom-right', margin = 25) => {
-  let x = margin;
-  let y = margin;
+export const calculateStampCoordinates = (
+  pageOrWidth,
+  heightOrStampW,
+  stampWOrH,
+  stampHOrPlacement,
+  placementOption = 'bottom-right',
+  marginOption = 20
+) => {
+  let rotation = 0;
+  let pageWidth = 595;
+  let pageHeight = 842;
+  let originX = 0;
+  let originY = 0;
+  let stampW = 250;
+  let stampH = 100;
+  let placement = 'bottom-right';
+  let margin = 20;
+
+  // Case 1: Called with a PDFPage object
+  if (typeof pageOrWidth === 'object' && pageOrWidth !== null && typeof pageOrWidth.getRotation === 'function') {
+    const page = pageOrWidth;
+    rotation = ((page.getRotation().angle % 360) + 360) % 360;
+
+    const box = typeof page.getCropBox === 'function' ? page.getCropBox() : page.getMediaBox();
+    originX = box.x || 0;
+    originY = box.y || 0;
+    pageWidth = box.width || (page.getWidth ? page.getWidth() : page.getSize().width);
+    pageHeight = box.height || (page.getHeight ? page.getHeight() : page.getSize().height);
+
+    stampW = typeof heightOrStampW === 'number' ? heightOrStampW : 250;
+    stampH = typeof stampWOrH === 'number' ? stampWOrH : 100;
+    placement = typeof stampHOrPlacement === 'string' ? stampHOrPlacement : 'bottom-right';
+    margin = typeof placementOption === 'number' ? placementOption : 20;
+  } else {
+    // Case 2: Legacy signature with numeric pageWidth, pageHeight
+    pageWidth = Number(pageOrWidth) || 595;
+    pageHeight = Number(heightOrStampW) || 842;
+    stampW = Number(stampWOrH) || 250;
+    stampH = Number(stampHOrPlacement) || 100;
+    placement = typeof placementOption === 'string' ? placementOption : 'bottom-right';
+    margin = typeof marginOption === 'number' ? marginOption : 20;
+    rotation = 0;
+  }
+
+  // Calculate dimensions in human viewer space
+  const isRotated90or270 = rotation === 90 || rotation === 270;
+  const visualWidth = isRotated90or270 ? pageHeight : pageWidth;
+  const visualHeight = isRotated90or270 ? pageWidth : pageHeight;
+
+  let visX = margin;
+  let visY = margin;
 
   switch (placement) {
     case 'bottom-left':
-      x = margin;
-      y = margin;
+      visX = margin;
+      visY = margin;
       break;
     case 'top-right':
-      x = Math.max(margin, pageWidth - stampW - margin);
-      y = Math.max(margin, pageHeight - stampH - margin);
+      visX = Math.max(margin, visualWidth - stampW - margin);
+      visY = Math.max(margin, visualHeight - stampH - margin);
       break;
     case 'top-left':
-      x = margin;
-      y = Math.max(margin, pageHeight - stampH - margin);
+      visX = margin;
+      visY = Math.max(margin, visualHeight - stampH - margin);
       break;
     case 'bottom-right':
     default:
-      x = Math.max(margin, pageWidth - stampW - margin);
-      y = margin;
+      visX = Math.max(margin, visualWidth - stampW - margin);
+      visY = margin;
       break;
+  }
+
+  let x = originX + visX;
+  let y = originY + visY;
+  let rotateAngle = 0;
+
+  if (rotation === 0) {
+    x = originX + visX;
+    y = originY + visY;
+    rotateAngle = 0;
+  } else if (rotation === 90) {
+    x = originX + pageWidth - visY;
+    y = originY + visX;
+    rotateAngle = 90;
+  } else if (rotation === 180) {
+    x = originX + pageWidth - visX;
+    y = originY + pageHeight - visY;
+    rotateAngle = 180;
+  } else if (rotation === 270) {
+    x = originX + visY;
+    y = originY + pageHeight - visX;
+    rotateAngle = 270;
   }
 
   return {
@@ -39,6 +110,8 @@ export const calculateStampCoordinates = (pageWidth, pageHeight, stampW, stampH,
     y: Math.round(y),
     width: stampW,
     height: stampH,
+    rotateAngle,
+    rotate: degrees(rotateAngle),
   };
 };
 
@@ -345,10 +418,8 @@ export const stampSignatureOnPdfAdvanced = async (pdfSource, stampOptions) => {
   const margin = 20;
 
   for (const page of targetPageList) {
-    const { width, height } = page.getSize();
     const coords = calculateStampCoordinates(
-      width,
-      height,
+      page,
       stampWidthPt,
       stampHeightPt,
       stampOptions.placement || 'bottom-right',
@@ -360,6 +431,7 @@ export const stampSignatureOnPdfAdvanced = async (pdfSource, stampOptions) => {
       y: coords.y,
       width: coords.width,
       height: coords.height,
+      rotate: coords.rotate,
     });
   }
 

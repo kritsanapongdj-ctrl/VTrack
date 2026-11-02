@@ -1118,7 +1118,7 @@ export default function App() {
         </svg>
       </div>
 
-      <aside className={`hidden md:flex ${isSidebarOpen ? 'w-68' : 'w-20'} flex-col bg-[#002447] text-white transition-all duration-300 relative z-20 overflow-hidden border-r border-[#C5A059]/20 shadow-[4px_0_24px_rgba(0,36,71,0.15)]`}>
+      <aside className={`hidden md:flex ${isSidebarOpen ? 'w-68' : 'w-20'} flex-col bg-[#002447] text-white transition-all duration-300 relative z-20 overflow-hidden border-r-4 border-black shadow-[4px_0_24px_rgba(0,36,71,0.15)]`}>
         {/* Architectural Subtle Grid Overlay inside Sidebar */}
         <div className="absolute inset-0 bg-drafting-grid opacity-10 pointer-events-none"></div>
         
@@ -1126,7 +1126,7 @@ export default function App() {
         <div className="h-20 flex items-center justify-between px-6 border-b border-[#C5A059]/15 relative z-10">
           {isSidebarOpen ? (
             <div className="flex flex-col">
-              <span className="font-serif-luxury font-bold text-2xl tracking-wider text-white">
+              <span className=" font-bold text-2xl tracking-wider text-white">
                 V<span className="text-[#C5A059]">-TRACK</span>
               </span>
               <span className="text-xs tracking-[0.2em] font-mono-tech text-[#C5A059]/80 uppercase">
@@ -1134,7 +1134,7 @@ export default function App() {
               </span>
             </div>
           ) : (
-            <span className="font-serif-luxury font-bold text-xl text-[#C5A059] mx-auto">VT</span>
+            <span className=" font-bold text-xl text-[#C5A059] mx-auto">VT</span>
           )}
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
@@ -1168,11 +1168,11 @@ export default function App() {
       </aside>
 
       <main className="flex-1 flex flex-col h-full overflow-hidden relative z-10">
-        <header className="h-16 md:h-20 bg-[#F8F6F0]/90 backdrop-blur-md border-b border-black flex items-center justify-between px-6 md:px-8 sticky top-0 z-30">
+        <header className="h-16 md:h-20 bg-[#F8F6F0]/90 border-b border-black flex items-center justify-between px-6 md:px-8 sticky top-0 z-30">
           <div className="flex items-center space-x-3">
             <div className="hidden sm:flex w-2.5 h-2.5 rounded-full bg-[#C5A059] shadow-[0_0_8px_#C5A059] animate-pulse"></div>
             <div>
-              <h2 className="text-base md:text-xl font-serif-luxury font-bold text-[#002447] tracking-tight">
+              <h2 className="text-base md:text-xl  font-bold text-[#002447] tracking-tight">
                 ระบบจัดการใบงาน V-TRACK
               </h2>
               <div className="hidden md:flex items-center space-x-2">
@@ -1253,7 +1253,7 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-100 flex justify-around items-center h-16 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 border-t border-gray-100 flex justify-around items-center h-16 z-30">
           <MobileNavItem id="dashboard" icon={LayoutDashboard} label="แดชบอร์ด" active={activeTab} set={setActiveTab} />
           <MobileNavItem id="add" icon={PlusCircle} label="เพิ่ม" active={activeTab} set={setActiveTab} />
           <MobileNavItem id="management" icon={FileText} label="รายการ" active={activeTab} set={setActiveTab} />
@@ -1264,7 +1264,7 @@ export default function App() {
 
       {/* Global Modals for V2 Operations */}
       {viewDetailTask && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center z-[70] p-0 md:p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-[70] p-0 md:p-4 overflow-y-auto">
           <div className="relative w-full max-w-3xl mt-16 md:mt-0 animate-in slide-in-from-bottom-full md:zoom-in-95 duration-300">
             <button 
               onClick={() => setViewDetailTask(null)} 
@@ -1351,7 +1351,7 @@ function NavItem({ id, icon: Icon, label, active, set, open }) {
       onClick={() => set(id)} 
       className={`w-full flex items-center space-x-3 px-3.5 py-3 transition-all duration-300 relative select-none ${
         isAct 
-          ? 'bg-gradient-to-r from-[#C5A059] to-[#DFBE77] text-[#002447] font-bold shadow-md shadow-[#C5A059]/20 rounded-r-2xl rounded-l-md translate-x-1' 
+          ? 'bg-[#FFD93D] text-black font-extrabold border-2 border-black shadow-[3px_3px_0_0_#000]' 
           : 'text-white/70 hover:bg-white/5 hover:text-white rounded-lg'
       }`}
     >
@@ -1386,11 +1386,11 @@ function PinLock({ onUnlock }) {
   return (
     <div className="flex flex-col items-center pt-12 animate-in fade-in zoom-in duration-500">
       <div className="asym-card p-8 border border-black w-full max-w-xs text-center shadow-lg relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#002447] via-[#C5A059] to-[#002447]"></div>
+        <div className="absolute top-0 left-0 right-0 h-1 bg-black"></div>
         <div className="w-12 h-12 mx-auto rounded-full bg-[#FAF8F5] border border-[#C5A059]/40 flex items-center justify-center text-[#002447] mb-3 shadow-inner">
           <Lock size={20} className="text-[#C5A059]" />
         </div>
-        <h3 className="font-serif-luxury font-bold text-lg text-[#002447]">ระบบรักษาความปลอดภัย</h3>
+        <h3 className=" font-bold text-lg text-[#002447]">ระบบรักษาความปลอดภัย</h3>
         <p className="text-xs text-gray-500 font-mono-tech mt-1 tracking-wider uppercase">ARCHITECTURAL ACCESS CONTROL</p>
         <form onSubmit={sub} className="mt-5 space-y-4">
           <input 
@@ -1403,7 +1403,7 @@ function PinLock({ onUnlock }) {
           />
           <button 
             type="submit" 
-            className="w-full py-3 bg-gradient-to-r from-[#002447] to-[#003366] text-white rounded-xl text-xs font-bold tracking-wider hover:opacity-95 shadow-md flex items-center justify-center space-x-1"
+            className="w-full py-3 brut-btn bg-[#FFD93D] text-black min-h-12 text-sm font-extrabold flex items-center justify-center space-x-1"
           >
             <span>ปลดล็อคระบบ</span>
           </button>
@@ -1436,7 +1436,7 @@ function AdminPasscodeModal({ isOpen, onClose, onSuccess, title = "กรุณ�
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200">
       <div className="bg-white p-8 rounded-none shadow-2xl border border-gray-100 w-full max-w-sm text-center relative">
         <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
         <div className="w-16 h-16 bg-[#003366]/5 rounded-full flex items-center justify-center mx-auto mb-4 text-[#003366]"><Lock size={26}/></div>
@@ -1499,7 +1499,7 @@ function PaymentDateModal({ task, isOpen, onClose, onConfirm }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200">
       <div className="bg-white p-6 md:p-8 rounded-none shadow-2xl border border-emerald-100 w-full max-w-md text-left relative">
         <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
         
@@ -1602,7 +1602,7 @@ function CancelTaskModal({ task, isOpen, onClose, onConfirm }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
       <div className="bg-white p-8 rounded-none shadow-2xl border border-red-100 w-full max-w-md text-left relative">
         <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
         <div className="flex items-center space-x-3 mb-4">
@@ -1692,7 +1692,7 @@ function PdfViewerModal({ isOpen, onClose, fileUrlOrId, title, fileName, onDownl
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center z-[120] p-2 md:p-6 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/80 flex flex-col items-center justify-center z-[120] p-2 md:p-6 animate-in fade-in duration-200">
       <div className="bg-[#1e293b] border border-gray-700 w-full max-w-5xl h-[92vh] rounded-none flex flex-col overflow-hidden shadow-2xl relative">
         {/* Header bar */}
         <div className="flex items-center justify-between px-5 py-3.5 bg-[#0f172a] border-b border-gray-800 text-white shrink-0">
@@ -1924,7 +1924,7 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
   const canConfirm = signMode === 'draw' ? hasDrawn : !!uploadedImage;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
       <div className="bg-white p-6 md:p-8 rounded-none shadow-2xl border border-indigo-100 w-full max-w-2xl text-left relative max-h-[92vh] overflow-y-auto">
         <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
         <div className="flex items-center space-x-3 mb-4">
@@ -2156,7 +2156,7 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
                 {currentSigPreview ? (
                   <img src={currentSigPreview} alt="Signature Preview" className="max-h-12 max-w-full object-contain filter drop-shadow-sm" />
                 ) : (
-                  <span className="text-xs text-gray-300 italic">(ลายเซ็นต์)</span>
+                  <span className="text-xs text-gray-300">(ลายเซ็นต์)</span>
                 )}
                 <div className="w-full border-t border-slate-200 mt-1 text-xs text-gray-400 text-center">
                   (ลายมือชื่อผู้ตรวจรับ)
@@ -2224,7 +2224,7 @@ function TaskOrderUploadModal({ task, isOpen, onClose, onConfirm }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
       <div className="bg-white p-6 md:p-8 rounded-none shadow-2xl border border-blue-100 w-full max-w-md text-left relative">
         <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
         <div className="flex items-center space-x-3 mb-4">
@@ -2334,7 +2334,7 @@ function RescheduleModal({ task, isOpen, onClose, onConfirm }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
       <div className="bg-white p-6 md:p-8 rounded-none shadow-2xl border border-amber-100 w-full max-w-md text-left relative">
         <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
         <div className="flex items-center space-x-3 mb-4">
@@ -2878,7 +2878,7 @@ function PrintReport({ tasks, printData, onDone }) {
           </table>
         ) : (
           <div className="p-8 text-center border border-dashed border-gray-400 bg-gray-50">
-            <p className="text-gray-600 italic">-- ไม่มีรายการใบงานในตัวกรองนี้ --</p>
+            <p className="text-gray-600">-- ไม่มีรายการใบงานในตัวกรองนี้ --</p>
           </div>
         )}
       </div>
@@ -3264,7 +3264,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
 
           <div className="flex items-center justify-between pb-4 border-b border-black mb-5 relative z-10">
             <div>
-              <h4 className="font-serif-luxury font-bold text-lg md:text-xl text-[#002447]">สัดส่วนสถานะงาน</h4>
+              <h4 className=" font-bold text-lg md:text-xl text-[#002447]">สัดส่วนสถานะงาน</h4>
               <p className="text-xs font-mono-tech text-[#8C7B63] tracking-widest uppercase">DISPATCH METRICS & RATIOS</p>
             </div>
             <span className="text-xs font-mono-tech text-[#002447] bg-[#FAF8F5] border border-black px-2.5 py-1 rounded-none font-bold">
@@ -3280,7 +3280,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                 style={pieStyle}
               >
                 <div className="w-28 h-28 bg-white rounded-full flex flex-col items-center justify-center shadow-sm border border-black z-10">
-                  <span className="text-3xl font-serif-luxury font-bold text-[#002447]">{baseFilteredTasks.length}</span>
+                  <span className="text-3xl  font-bold text-[#002447]">{baseFilteredTasks.length}</span>
                   <span className="text-xs font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider mt-0.5">ใบงานรวม</span>
                 </div>
               </div>
@@ -3346,7 +3346,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
           <div className="p-5 md:p-6 border-b-2 border-black bg-[#FFD93D] flex justify-between items-center">
             <div className="flex flex-col">
               <span className="tech-stamp">MONTHLY OPERATIONS STREAM</span>
-              <h4 className="font-serif-luxury font-bold text-lg md:text-xl text-[#002447] mt-0.5">
+              <h4 className=" font-bold text-lg md:text-xl text-[#002447] mt-0.5">
                 สารบบใบงานประจำงวด
               </h4>
               <p className="text-xs text-[#B08731] font-medium">{selectedMonthFormatted}</p>
@@ -3463,7 +3463,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center py-24 text-gray-400">
                 <CalendarDays size={48} className="mb-3 text-[#B08731]/30"/>
-                <p className="font-serif-luxury text-base font-bold text-[#002447]">ไม่พบข้อมูลใบงานตามเงื่อนไขที่เลือก</p>
+                <p className=" text-base font-bold text-[#002447]">ไม่พบข้อมูลใบงานตามเงื่อนไขที่เลือก</p>
                 <p className="text-xs font-mono-tech text-gray-400 mt-1 uppercase">NO CORRESPONDING RECORDS FOUND</p>
                 {(filterProj || filterComp || quickFilter !== 'all' || searchTerm) && (
                   <button
@@ -3532,7 +3532,7 @@ function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = 
         </div>
         <div>
           <span className="tech-stamp">{initialData ? 'RECORD SPECIFICATION UPDATE' : 'NEW DISPATCH INITIATION'}</span>
-          <h3 className="font-serif-luxury font-bold text-xl md:text-2xl text-[#002447] text-left">
+          <h3 className=" font-bold text-xl md:text-2xl text-[#002447] text-left">
             {initialData ? 'แก้ไขข้อมูลใบงาน' : 'เปิดรายการใหม่ (รอใบเสนอราคา)'}
           </h3>
         </div>
@@ -3661,7 +3661,7 @@ function Management({ tasks, settings, onSave, onDelete, onViewDetail, onRequest
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <span className="tech-stamp">TASK REGISTER & MANAGEMENT</span>
-              <h3 className="font-serif-luxury text-xl md:text-2xl font-bold text-[#002447]">
+              <h3 className=" text-xl md:text-2xl font-bold text-[#002447]">
                 จัดการข้อมูลใบงาน V-TRACK
               </h3>
             </div>
@@ -3753,8 +3753,8 @@ function Management({ tasks, settings, onSave, onDelete, onViewDetail, onRequest
           {currentItems.map(t => {
             const isSchedOver = isScheduleOverdue(t);
             return (
-              <div key={t.id} className="group relative p-5 bg-white/80 backdrop-blur-md rounded-2xl border border-gray-100/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col gap-3">
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#C5A059] to-[#003366]"></div>
+              <div key={t.id} className="group relative p-5 bg-white/80 rounded-2xl border border-gray-100/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col gap-3">
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-black"></div>
                 
                 <div className="flex justify-between items-start pl-2">
                   <div className="flex flex-col min-w-0 pr-2">
@@ -3882,7 +3882,7 @@ function CalendarView({ tasks, onViewDetail }) {
         <button onClick={()=>setNow(new Date(y, m-1, 1))} className="p-3 bg-[#FAF8F5] border border-black rounded-xl text-[#002447] hover:bg-[#F3EFE6] transition-colors"><ChevronLeft size={18}/></button>
         <div className="text-center">
           <span className="tech-stamp">PROJECT SCHEDULE TIMELINE</span>
-          <h4 className="font-serif-luxury font-bold text-[#002447] text-xl md:text-2xl mt-0.5">{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(now)}</h4>
+          <h4 className=" font-bold text-[#002447] text-xl md:text-2xl mt-0.5">{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(now)}</h4>
           <span className="text-xs text-[#8C7B63] font-medium font-mono-tech uppercase">MULTI-DAY ARCHITECTURAL TIMELINE</span>
         </div>
         <button onClick={()=>setNow(new Date(y, m+1, 1))} className="p-3 bg-[#FAF8F5] border border-black rounded-xl text-[#002447] hover:bg-[#F3EFE6] transition-colors"><ChevronRight size={18}/></button>
@@ -3936,7 +3936,7 @@ function CalendarView({ tasks, onViewDetail }) {
 
       {/* PopUp on Day Click */}
       {selectedDayTasks && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center z-[60] p-0 md:p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/60 flex items-end md:items-center justify-center z-[60] p-0 md:p-4 animate-in fade-in duration-200">
           <div className="bg-white p-6 md:p-8 rounded-none w-full max-w-md shadow-2xl animate-in slide-in-from-bottom-full md:zoom-in-95 duration-300 max-h-[85vh] flex flex-col">
             <div className="flex justify-between items-center mb-6">
                <h3 className="font-bold text-xl text-[#003366]">วันที่ {selectedDayTasks.displayDate} {new Intl.DateTimeFormat('th-TH', { month: 'long' }).format(now)}</h3>
@@ -4239,7 +4239,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
         {/* Progress Bar */}
         <div className="w-full bg-[#FAF8F5] h-3.5 rounded-full overflow-hidden mb-2 border border-black">
           <div 
-            className="h-full bg-gradient-to-r from-[#002447] via-[#C5A059] to-[#DFBE77] transition-all duration-500 rounded-full"
+            className="h-full bg-black transition-all duration-500 rounded-full"
             style={{ width: `${Math.max(2, storageStats.percent)}%` }}
           />
         </div>
@@ -4255,7 +4255,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
         <div className="flex items-center space-x-2 mb-4">
           <span className="tech-stamp">REPORT EXPORT & DATA BACKUP</span>
         </div>
-        <h4 className="text-sm font-serif-luxury font-bold text-[#002447] mb-6 tracking-wide flex items-center">
+        <h4 className="text-sm  font-bold text-[#002447] mb-6 tracking-wide flex items-center">
           <Printer size={18} className="mr-2 text-[#C5A059]"/> ระบบออกรายงานและสำรองข้อมูล
         </h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
@@ -4277,8 +4277,8 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-4">
-          <button onClick={() => triggerPrint({ selectedMonth: reportMonth, filterProj: reportProj, filterComp: reportComp, filterStatus: reportStatus })} className="flex-1 py-3.5 bg-gradient-to-r from-[#002447] to-[#003366] text-white rounded-xl font-bold flex items-center justify-center space-x-2 shadow-sm"><Printer size={18}/><span>พิมพ์รายงาน PDF</span></button>
-          <button onClick={handleExportExcel} className="flex-1 py-3.5 bg-gradient-to-r from-[#047857] to-[#065F46] text-white rounded-xl font-bold flex items-center justify-center space-x-2 shadow-sm"><FileDown size={18}/><span>ดาวน์โหลด Backup Excel</span></button>
+          <button onClick={() => triggerPrint({ selectedMonth: reportMonth, filterProj: reportProj, filterComp: reportComp, filterStatus: reportStatus })} className="flex-1 py-3.5 brut-btn bg-[#FFD93D] text-black min-h-12 font-bold flex items-center justify-center space-x-2 shadow-sm"><Printer size={18}/><span>พิมพ์รายงาน PDF</span></button>
+          <button onClick={handleExportExcel} className="flex-1 py-3.5 brut-btn bg-[#B8F2C9] text-black min-h-12 font-bold flex items-center justify-center space-x-2 shadow-sm"><FileDown size={18}/><span>ดาวน์โหลด Backup Excel</span></button>
         </div>
       </div>
 
@@ -4331,7 +4331,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
                 })}
               </div>
             ) : (
-              <p className="text-xs text-gray-400 italic text-center py-4">ไม่มีรายการที่ถูกยกเลิก</p>
+              <p className="text-xs text-gray-400 text-center py-4">ไม่มีรายการที่ถูกยกเลิก</p>
             )}
           </div>
         )}
@@ -4516,7 +4516,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
                           <Mail size={10}/> {email}
                         </span>
                       ) : (
-                        <span className="text-gray-400 italic">ยังไม่ระบุอีเมล</span>
+                        <span className="text-gray-400">ยังไม่ระบุอีเมล</span>
                       )}
                       <button 
                         onClick={() => { setEditingComp(item); setEditEmailVal(email || ''); }}
@@ -4538,7 +4538,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
         <h4 className="text-xs font-bold text-red-400 mb-4 uppercase tracking-widest">พื้นที่อันตราย</h4>
         <button onClick={() => setShowClearConfirm(true)} className="bg-red-500 text-white px-12 py-4 rounded-2xl font-bold flex items-center mx-auto"><Trash size={18} className="mr-2"/> ล้างฐานข้อมูล</button>
         {showClearConfirm && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-6">
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-6">
             <div className="bg-white p-10 rounded-none w-full max-w-sm text-center">
               <h3 className="font-bold text-gray-800 text-2xl mb-2">ยืนยันลบข้อมูลทั้งหมด?</h3>
               <div className="flex gap-4 mt-8">
@@ -4552,7 +4552,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
 
       {/* Modal: Google Apps Script Code & Setup Instructions */}
       {showGasModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-in fade-in">
           <div className="bg-white p-6 md:p-8 rounded-none w-full max-w-2xl max-h-[90vh] overflow-y-auto text-left space-y-5 custom-scrollbar shadow-2xl">
             <div className="flex justify-between items-center border-b border-gray-100 pb-3">
               <div className="flex items-center gap-2">

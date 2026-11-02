@@ -19,15 +19,15 @@ export const calculateStampCoordinates = (
   placementOption = 'bottom-right',
   marginOption = 20
 ) => {
-  let rotation = 0;
-  let pageWidth = 595;
-  let pageHeight = 842;
+  let rotation;
+  let pageWidth;
+  let pageHeight;
   let originX = 0;
   let originY = 0;
-  let stampW = 250;
-  let stampH = 100;
-  let placement = 'bottom-right';
-  let margin = 20;
+  let stampW;
+  let stampH;
+  let placement;
+  let margin;
 
   // Case 1: Called with a PDFPage object
   if (typeof pageOrWidth === 'object' && pageOrWidth !== null && typeof pageOrWidth.getRotation === 'function') {
@@ -60,8 +60,8 @@ export const calculateStampCoordinates = (
   const visualWidth = isRotated90or270 ? pageHeight : pageWidth;
   const visualHeight = isRotated90or270 ? pageWidth : pageHeight;
 
-  let visX = margin;
-  let visY = margin;
+  let visX;
+  let visY;
 
   switch (placement) {
     case 'bottom-left':
@@ -402,7 +402,7 @@ export const stampSignatureOnPdfAdvanced = async (pdfSource, stampOptions) => {
   if (pages.length === 0) throw new Error('เอกสารไม่มีหน้าสำหรับประทับตรา');
 
   // Determine target pages
-  let targetPageList = [];
+  let targetPageList;
   if (stampOptions.targetPages === 'first') {
     targetPageList = [pages[0]];
   } else if (stampOptions.targetPages === 'all') {

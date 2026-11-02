@@ -154,3 +154,18 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #C5A059;
 }
+/* --- Form fields (brutalist) --- */
+.field, .input-style {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.6rem 0.9rem;
+  background: #fff;
+  border: 2px solid #111;
+  border-radius: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111;
+}
+.field::placeholder, .input-style::placeholder { color: #555; font-weight: 500; }
+.field:focus, .input-style:focus { outline: 3px solid #111; outline-offset: 0; background: #FFF7CC; }
+textarea.input-style { min-height: 96px; }

@@ -1,7 +1,7 @@
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  LayoutDashboard, FileText, Settings, Calendar as CalendarIcon, PlusCircle, 
+  LayoutDashboard, FileText, Settings, PlusCircle, 
   Upload, Search, Edit, Trash2, X, AlertCircle, Menu, ChevronLeft, ChevronRight, 
   User, Filter, CalendarDays, FileDown, Printer, Trash, MapPin, Building2, Briefcase,
   Paperclip, PenTool, CheckCircle2, Clock, AlertTriangle, ArrowRight, Download,
@@ -545,6 +545,62 @@ const getOriginalMonthStr = (task) => {
   return new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(baseMonth));
 };
 
+// อีเมลของร้านค้าเก็บเป็นอาร์เรย์ (ข้อมูลเก่าเป็นสตริงเดียว/คั่นด้วย , จึงรองรับทั้งสองแบบ)
+const EMAIL_RE = /^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$/;
+const toEmailList = (v) => {
+  if (Array.isArray(v)) return v.filter(Boolean);
+  return typeof v === 'string' ? v.split(/[\s,;]+/).filter(Boolean) : [];
+};
+const parseEmails = (raw) => {
+  const parts = String(raw || '').split(/[\s,;]+/).filter(Boolean);
+  return { valid: parts.filter(x => EMAIL_RE.test(x)), invalid: parts.filter(x => !EMAIL_RE.test(x)) };
+};
+
+function CompanyRow({ name, emails, onAddEmails, onRemoveEmail, onDelete }) {
+  const [val, setVal] = useState('');
+  const [err, setErr] = useState('');
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!val.trim()) return;
+    const msg = await onAddEmails(val);
+    setErr(msg || '');
+    if (!msg) setVal('');
+  };
+
+  return (
+    <div className="border-2 border-black bg-white">
+      <div className="flex items-center justify-between pl-3 border-b-2 border-black bg-[#FFD93D]">
+        <span className="text-sm font-black py-2 break-words min-w-0">{name}</span>
+        <button onClick={onDelete} className="min-h-12 min-w-12 flex items-center justify-center border-l-2 border-black bg-white hover:bg-[#FF5C5C] shrink-0" title="ลบร้านค้านี้" aria-label={`ลบ ${name}`}>
+          <X size={16}/>
+        </button>
+      </div>
+      <div className="p-3 space-y-2">
+        {emails.length > 0 ? (
+          <ul className="flex flex-wrap gap-2">
+            {emails.map(em => (
+              <li key={em} className="flex items-center border-2 border-black bg-[#BDE3FF] text-sm font-bold">
+                <span className="px-2 py-1 break-all">{em}</span>
+                <button onClick={() => onRemoveEmail(em)} className="min-h-9 min-w-9 flex items-center justify-center border-l-2 border-black bg-white hover:bg-[#FF5C5C]" aria-label={`ลบอีเมล ${em}`}>
+                  <X size={14}/>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm font-medium opacity-70">ยังไม่มีอีเมล</p>
+        )}
+        <form onSubmit={submit} className="flex gap-2">
+          <input className="field flex-1" placeholder="เพิ่มอีเมล (หลายอีเมลคั่นด้วย , ได้)" value={val} onChange={e => { setVal(e.target.value); setErr(''); }} />
+          <button type="submit" className="brut-btn min-h-12 px-4 bg-white text-sm font-extrabold shrink-0">+ เพิ่ม</button>
+        </form>
+        {err && <p className="text-xs font-bold text-[#B91C1C]">{err}</p>}
+      </div>
+    </div>
+  );
+}
+
 function InlineStatusSelect({ task, onSave, onRequestCancel, onRequestDisbursement }) {
   const s = STATUSES.find(x => x.name === task.status);
   
@@ -571,18 +627,18 @@ function InlineStatusSelect({ task, onSave, onRequestCancel, onRequestDisburseme
   };
   
   return (
-    <div className="relative inline-block w-full max-w-[160px]">
+    <div className="relative inline-block w-full max-w-[240px]">
       <select 
         value={task.status} 
         onChange={handleChange}
-        className="w-full appearance-none px-3 py-1.5 rounded-none text-xs font-bold border-t border-t-white/40 border-b-2 border-b-black/20 cursor-pointer outline-none focus:ring-2 focus:ring-[#C5A059]"
+        className="w-full appearance-none pl-3 pr-8 min-h-12 text-sm font-extrabold border-2 border-black cursor-pointer outline-none focus:outline-3 focus:outline-black"
         style={{backgroundColor: s?.bgColor || '#f3f4f6', color: s?.color || '#374151'}}
       >
         {STATUSES.map(st => (
           <option key={st.id} value={st.name}>{st.name}</option>
         ))}
       </select>
-      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-black">
         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
       </div>
     </div>
@@ -616,6 +672,7 @@ export default function App() {
   const [passcodeModal, setPasscodeModal] = useState({ isOpen: false, title: '', onSuccess: null });
   const [disbursementModalTask, setDisbursementModalTask] = useState(null);
   const [viewDetailTask, setViewDetailTask] = useState(null);
+  const [editTask, setEditTask] = useState(null);
   const [pdfPreviewModal, setPdfPreviewModal] = useState(null);
 
   useEffect(() => {
@@ -879,7 +936,7 @@ export default function App() {
         }));
       }
       // ฟังก์ชันที่ 2: ส่งอีเมลแจ้งเตือนไปยังผู้รับเหมาตามอีเมลที่บันทึกไว้ในตั้งค่า (ผูกกับชื่อบริษัท)
-            const contractorEmail = settings?.companyEmails?.[task.company];
+            const contractorEmail = toEmailList(settings?.companyEmails?.[task.company]).join(',');
       let notifiedContractor = false;
       if (contractorEmail) {
         try {
@@ -1064,81 +1121,40 @@ export default function App() {
     await setDoc(settingsRef, newSet);
   };
 
+  const lockAdmin = () => {
+    setIsUnlocked(false);
+    setEditTask(null);
+    if (['add', 'settings'].includes(activeTab)) setActiveTab('dashboard');
+  };
+
   if (systemError) return <div className="p-8 text-center text-red-500 font-bold">{systemError}</div>;
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-12 h-12 border-4 border-[#003366]/10 border-t-[#C5A059] rounded-full animate-spin"></div></div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-12 h-12 border-4 border-[#003366]/10 border-t-[#FFD93D] rounded-full animate-spin"></div></div>;
 
   if (isPrinting && printData) {
     return <PrintReport tasks={tasks} printData={printData} onDone={() => setIsPrinting(false)} />;
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-[#F8F6F0] text-[#1E252B] font-sans overflow-hidden relative selection:bg-[#C5A059]/20 selection:text-[#002447]">
-      {/* Background Architectural Ambient SVG Curves (Flowing dynamic ribbons + drafting grid) */}
-      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden opacity-40">
-        <div className="absolute inset-0 bg-drafting-grid opacity-25"></div>
-        <svg 
-          className="absolute -top-32 -left-32 w-[140%] h-[140%] pointer-events-none opacity-60" 
-          viewBox="0 0 1600 1200" 
-          fill="none" 
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          {/* Subtle flowing dynamic ribbons referencing Land & Houses architectural contours */}
-          <path 
-            d="M -100 250 C 350 120, 650 480, 1100 280 C 1450 120, 1600 450, 1800 350" 
-            stroke="#C5A059" 
-            strokeWidth="1.2" 
-            strokeOpacity="0.4"
-            className="animate-wave-flow" 
-            fill="none" 
-          />
-          <path 
-            d="M -100 310 C 380 180, 680 540, 1130 340 C 1480 180, 1630 510, 1800 410" 
-            stroke="#002447" 
-            strokeWidth="0.8" 
-            strokeOpacity="0.18" 
-            strokeDasharray="8 6"
-            fill="none" 
-          />
-          <path 
-            d="M -100 850 C 400 950, 750 650, 1200 800 C 1500 920, 1650 750, 1800 820" 
-            stroke="#C5A059" 
-            strokeWidth="1.5" 
-            strokeOpacity="0.3" 
-            strokeDasharray="16 12"
-            fill="none" 
-          />
-          {/* 80s Architectural Drafting Crosshairs & Registration Marks */}
-          <circle cx="280" cy="180" r="14" stroke="#C5A059" strokeWidth="0.75" strokeOpacity="0.35" />
-          <line x1="280" y1="160" x2="280" y2="200" stroke="#C5A059" strokeWidth="0.75" strokeOpacity="0.35" />
-          <line x1="260" y1="180" x2="300" y2="180" stroke="#C5A059" strokeWidth="0.75" strokeOpacity="0.35" />
-
-          <circle cx="1320" cy="940" r="14" stroke="#002447" strokeWidth="0.75" strokeOpacity="0.25" />
-          <line x1="1320" y1="920" x2="1320" y2="960" stroke="#002447" strokeWidth="0.75" strokeOpacity="0.25" />
-          <line x1="1300" y1="940" x2="1340" y2="940" stroke="#002447" strokeWidth="0.75" strokeOpacity="0.25" />
-        </svg>
-      </div>
-
-      <aside className={`hidden md:flex ${isSidebarOpen ? 'w-68' : 'w-20'} flex-col bg-[#002447] text-white transition-all duration-300 relative z-20 overflow-hidden border-r-4 border-black shadow-[4px_0_24px_rgba(0,36,71,0.15)]`}>
+    <div className="flex flex-col md:flex-row h-screen bg-[#FFFBEB] text-black font-sans overflow-hidden relative">
+      <aside className={`hidden md:flex ${isSidebarOpen ? 'w-68' : 'w-20'} flex-col bg-black text-white transition-all duration-300 relative z-20 overflow-hidden border-r-4 border-black`}>
         {/* Architectural Subtle Grid Overlay inside Sidebar */}
-        <div className="absolute inset-0 bg-drafting-grid opacity-10 pointer-events-none"></div>
-        
         {/* Brand Section */}
-        <div className="h-20 flex items-center justify-between px-6 border-b border-[#C5A059]/15 relative z-10">
+        <div className="h-20 flex items-center justify-between px-6 border-b border-[#FFD93D]/15 relative z-10">
           {isSidebarOpen ? (
             <div className="flex flex-col">
               <span className=" font-bold text-2xl tracking-wider text-white">
-                V<span className="text-[#C5A059]">-TRACK</span>
+                V<span className="text-[#FFD93D]">-TRACK</span>
               </span>
-              <span className="text-xs tracking-[0.2em] font-mono-tech text-[#C5A059]/80 uppercase">
+              <span className="text-xs tracking-[0.2em] font-mono-tech text-[#FFD93D]/80 uppercase">
                 LAND & HOUSES • ENG.
               </span>
             </div>
           ) : (
-            <span className=" font-bold text-xl text-[#C5A059] mx-auto">VT</span>
+            <span className=" font-bold text-xl text-[#FFD93D] mx-auto">VT</span>
           )}
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
-            className="p-2 hover:bg-[#C5A059]/10 text-white/70 hover:text-[#C5A059] rounded-lg transition-colors border border-transparent hover:border-[#C5A059]/30"
+            className="p-2 hover:bg-[#FFD93D]/10 text-white/70 hover:text-[#FFD93D] rounded-lg transition-colors border border-transparent hover:border-[#FFD93D]/30"
           >
             <Menu size={18}/>
           </button>
@@ -1147,18 +1163,18 @@ export default function App() {
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-2 relative z-10">
           <NavItem id="dashboard" icon={LayoutDashboard} label="แดชบอร์ด" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
-          <NavItem id="add" icon={PlusCircle} label="เพิ่มใบงาน" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
-          <NavItem id="management" icon={FileText} label="จัดการข้อมูล" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
-          <NavItem id="calendar" icon={CalendarIcon} label="ปฏิทินงาน" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
-          <div className="pt-4 mt-2 border-t border-[#C5A059]/15">
-            <NavItem id="settings" icon={Settings} label="ตั้งค่าระบบ" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
-          </div>
+          {isUnlocked && <NavItem id="add" icon={PlusCircle} label="เพิ่มใบงาน" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>}
+          {isUnlocked && (
+            <div className="pt-4 mt-2 border-t-2 border-white/20 space-y-2">
+              <NavItem id="settings" icon={Settings} label="ตั้งค่าระบบ" active={activeTab} set={setActiveTab} open={isSidebarOpen}/>
+            </div>
+          )}
         </nav>
 
         {/* 80s Architectural Edition Stamp in footer */}
         {isSidebarOpen && (
-          <div className="p-4 border-t border-[#C5A059]/15 bg-[#001c37] relative z-10 text-xs font-mono-tech text-white/50 flex flex-col gap-0.5">
-            <div className="flex items-center justify-between text-[#C5A059]/80 font-semibold">
+          <div className="p-4 border-t border-[#FFD93D]/15 bg-black border-t-2 border-white/30 relative z-10 text-xs font-mono-tech text-white/50 flex flex-col gap-0.5">
+            <div className="flex items-center justify-between text-[#FFD93D]/80 font-semibold">
               <span>LH ARCHITECTURE</span>
               <span>EST. 1983</span>
             </div>
@@ -1168,41 +1184,33 @@ export default function App() {
       </aside>
 
       <main className="flex-1 flex flex-col h-full overflow-hidden relative z-10">
-        <header className="h-16 md:h-20 bg-[#F8F6F0]/90 border-b border-black flex items-center justify-between px-6 md:px-8 sticky top-0 z-30">
+        <header className="h-16 md:h-20 bg-white border-b-4 border-black flex items-center justify-between px-4 md:px-8 sticky top-0 z-30">
           <div className="flex items-center space-x-3">
-            <div className="hidden sm:flex w-2.5 h-2.5 rounded-full bg-[#C5A059] shadow-[0_0_8px_#C5A059] animate-pulse"></div>
             <div>
-              <h2 className="text-base md:text-xl  font-bold text-[#002447] tracking-tight">
+              <h2 className="text-base md:text-xl  font-black text-black tracking-tight">
                 ระบบจัดการใบงาน V-TRACK
               </h2>
-              <div className="hidden md:flex items-center space-x-2">
-                <span className="tech-stamp">PROJECT TRACKING & QUALITY VERIFICATION</span>
-              </div>
             </div>
           </div>
           <div className="flex items-center space-x-3">
-            {isUnlocked && (
-              <button 
-                onClick={() => setIsUnlocked(false)} 
-                className="text-xs bg-red-50 text-red-600 px-2.5 py-1 rounded-none border border-red-200 font-mono-tech font-bold hover:bg-red-100 transition-colors"
+            {isUnlocked ? (
+              <button onClick={lockAdmin} className="brut-btn min-h-12 px-4 bg-[#B8F2C9] text-sm font-extrabold flex items-center gap-2" title="ออกจากโหมดแอดมิน">
+                <Unlock size={16}/><span>แอดมิน • ออกจากระบบ</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setPasscodeModal({ isOpen: true, title: 'ใส่รหัสผ่านเพื่อเข้าโหมดแอดมิน', onSuccess: () => { setIsUnlocked(true); setPasscodeModal({ isOpen: false, title: '', onSuccess: null }); } })}
+                className="brut-btn min-h-12 px-4 bg-[#FFD93D] text-sm font-extrabold flex items-center gap-2"
               >
-                [ 🔒 LOCK ]
+                <Lock size={16}/><span>เข้าสู่ระบบแอดมิน</span>
               </button>
             )}
-            <div className="flex items-center space-x-2.5 pl-2 border-l border-black">
-              <div className="w-8 h-8 rounded-none bg-white border border-[#C5A059]/50 flex items-center justify-center text-[#002447]">
-                <User size={16}/>
-              </div>
-              <span className="hidden sm:inline text-xs font-semibold text-[#002447]">LH Engineer</span>
-            </div>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto pb-24 md:pb-8 p-4 md:p-8 custom-scrollbar">
           <div className="max-w-6xl mx-auto">
-            {['add', 'management', 'settings'].includes(activeTab) && !isUnlocked ? (
-              <PinLock onUnlock={() => setIsUnlocked(true)} />
-            ) : (
+            {(
               <>
                 {activeTab === 'dashboard' && (
                   <Dashboard 
@@ -1210,34 +1218,21 @@ export default function App() {
                     settings={settings} 
                     onViewDetail={(t) => setViewDetailTask(t)}
                     onOpenReschedule={(t) => setRescheduleModalTask(t)}
-                  />
-                )}
-                {activeTab === 'add' && (
-                  <TaskForm 
-                    settings={settings} 
-                    onSave={saveTask} 
-                    onSuccess={() => setActiveTab('management')} 
-                  />
-                )}
-                {activeTab === 'management' && (
-                  <Management 
-                    tasks={tasks} 
-                    settings={settings} 
-                    onSave={saveTask} 
-                    onDelete={(t) => setCancelModalTask(t)}
-                    onViewDetail={(t) => setViewDetailTask(t)}
+                    isUnlocked={isUnlocked}
+                    onSave={saveTask}
+                    onEdit={(t) => setEditTask(t)}
                     onRequestCancel={(t) => setCancelModalTask(t)}
                     onRequestDisbursement={(t) => setDisbursementModalTask(t)}
                   />
                 )}
-                {activeTab === 'calendar' && (
-                  <CalendarView 
-                    tasks={tasks} 
+                {activeTab === 'add' && isUnlocked && (
+                  <TaskForm 
                     settings={settings} 
-                    onViewDetail={(t) => setViewDetailTask(t)}
+                    onSave={saveTask} 
+                    onSuccess={() => setActiveTab('dashboard')} 
                   />
                 )}
-                {activeTab === 'settings' && (
+                {activeTab === 'settings' && isUnlocked && (
                   <SettingsPanel 
                     settings={settings} 
                     updateSettings={updateSettings} 
@@ -1253,12 +1248,10 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 border-t border-gray-100 flex justify-around items-center h-16 z-30">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 border-t border-black flex justify-around items-center h-16 z-30">
           <MobileNavItem id="dashboard" icon={LayoutDashboard} label="แดชบอร์ด" active={activeTab} set={setActiveTab} />
-          <MobileNavItem id="add" icon={PlusCircle} label="เพิ่ม" active={activeTab} set={setActiveTab} />
-          <MobileNavItem id="management" icon={FileText} label="รายการ" active={activeTab} set={setActiveTab} />
-          <MobileNavItem id="calendar" icon={CalendarIcon} label="ปฏิทิน" active={activeTab} set={setActiveTab} />
-          <MobileNavItem id="settings" icon={Settings} label="ตั้งค่า" active={activeTab} set={setActiveTab} />
+          {isUnlocked && <MobileNavItem id="add" icon={PlusCircle} label="เพิ่มใบงาน" active={activeTab} set={setActiveTab} />}
+          {isUnlocked && <MobileNavItem id="settings" icon={Settings} label="ตั้งค่า" active={activeTab} set={setActiveTab} />}
         </nav>
       </main>
 
@@ -1286,6 +1279,19 @@ export default function App() {
               isUnlocked={isUnlocked}
             />
           </div>
+        </div>
+      )}
+
+      {editTask && isUnlocked && (
+        <div className="fixed inset-0 bg-black/70 z-[75] overflow-y-auto p-0 md:p-6">
+          <TaskForm
+            settings={settings}
+            initialData={editTask}
+            onSave={saveTask}
+            onSuccess={() => setEditTask(null)}
+            onCancel={() => setEditTask(null)}
+            isModal
+          />
         </div>
       )}
 
@@ -1356,9 +1362,9 @@ function NavItem({ id, icon: Icon, label, active, set, open }) {
       }`}
     >
       {isAct && (
-        <span className="absolute left-0 top-2 bottom-2 w-1 bg-[#002447] rounded-r-sm"></span>
+        <span className="absolute left-0 top-2 bottom-2 w-1 bg-black rounded-r-sm"></span>
       )}
-      <Icon size={18} strokeWidth={isAct ? 2.5 : 2} className={isAct ? 'text-[#002447]' : 'text-[#C5A059]/90'} />
+      <Icon size={18} strokeWidth={isAct ? 2.5 : 2} className={isAct ? 'text-black' : 'text-[#FFD93D]/90'} />
       {open && <span className="text-xs font-semibold tracking-wide">{label}</span>}
     </button>
   );
@@ -1370,46 +1376,13 @@ function MobileNavItem({ id, icon: Icon, label, active, set }) {
     <button 
       onClick={() => set(id)} 
       className={`flex flex-col items-center justify-center flex-1 h-full transition-colors relative ${
-        isAct ? 'text-[#002447]' : 'text-gray-400'
+        isAct ? 'text-black' : 'text-gray-600'
       }`}
     >
-      {isAct && <div className="absolute top-0 w-8 h-1 bg-[#C5A059] rounded-b-full"></div>}
-      <Icon size={18} strokeWidth={isAct ? 2.5 : 2} className={isAct ? 'text-[#C5A059]' : ''} />
+      {isAct && <div className="absolute top-0 w-8 h-1 bg-[#FFD93D] rounded-b-full"></div>}
+      <Icon size={18} strokeWidth={isAct ? 2.5 : 2} className={isAct ? 'text-[#FFD93D]' : ''} />
       <span className="text-xs mt-1 font-bold">{label}</span>
     </button>
-  );
-}
-
-function PinLock({ onUnlock }) {
-  const [v, setV] = useState('');
-  const sub = (e) => { e.preventDefault(); if (v === '1312') onUnlock(); else setV(''); };
-  return (
-    <div className="flex flex-col items-center pt-12 animate-in fade-in zoom-in duration-500">
-      <div className="asym-card p-8 border border-black w-full max-w-xs text-center shadow-lg relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-black"></div>
-        <div className="w-12 h-12 mx-auto rounded-full bg-[#FAF8F5] border border-[#C5A059]/40 flex items-center justify-center text-[#002447] mb-3 shadow-inner">
-          <Lock size={20} className="text-[#C5A059]" />
-        </div>
-        <h3 className=" font-bold text-lg text-[#002447]">ระบบรักษาความปลอดภัย</h3>
-        <p className="text-xs text-gray-500 font-mono-tech mt-1 tracking-wider uppercase">ARCHITECTURAL ACCESS CONTROL</p>
-        <form onSubmit={sub} className="mt-5 space-y-4">
-          <input 
-            type="password" 
-            placeholder="• • • •" 
-            className="w-full text-center tracking-[0.5em] text-xl font-bold py-3 bg-[#FAF8F5] border border-black rounded-xl focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-[#002447]" 
-            value={v} 
-            onChange={e => setV(e.target.value)} 
-            autoFocus 
-          />
-          <button 
-            type="submit" 
-            className="w-full py-3 brut-btn bg-[#FFD93D] text-black min-h-12 text-sm font-extrabold flex items-center justify-center space-x-1"
-          >
-            <span>ปลดล็อคระบบ</span>
-          </button>
-        </form>
-      </div>
-    </div>
   );
 }
 
@@ -1437,11 +1410,11 @@ function AdminPasscodeModal({ isOpen, onClose, onSuccess, title = "กรุณ�
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200">
-      <div className="bg-white p-8 rounded-none shadow-2xl border border-gray-100 w-full max-w-sm text-center relative">
-        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
-        <div className="w-16 h-16 bg-[#003366]/5 rounded-full flex items-center justify-center mx-auto mb-4 text-[#003366]"><Lock size={26}/></div>
+      <div className="bg-white p-8 brut-panel w-full max-w-sm text-center relative">
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-600 hover:bg-gray-100"><X size={18}/></button>
+        <div className="w-16 h-16 bg-black/5 rounded-full flex items-center justify-center mx-auto mb-4 text-black"><Lock size={26}/></div>
         <h3 className="font-bold text-gray-800 text-lg mb-1">ยืนยันสิทธิ์ผู้ดูแล (Admin)</h3>
-        <p className="text-xs text-gray-400 mb-6 font-medium">{title}</p>
+        <p className="text-xs text-gray-600 mb-6 font-medium">{title}</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input 
             type="password" 
@@ -1449,13 +1422,13 @@ function AdminPasscodeModal({ isOpen, onClose, onSuccess, title = "กรุณ�
             onChange={e => setPin(e.target.value)} 
             maxLength={4} 
             placeholder="••••" 
-            className="w-full text-center text-3xl tracking-[0.5em] p-3.5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059]" 
+            className="w-full text-center text-3xl tracking-[0.5em] p-3.5 bg-gray-50 rounded-2xl border-2 border-black focus:ring-2 focus:ring-[#FFD93D]" 
             autoFocus 
           />
           {err && <p className="text-xs text-red-500 font-bold">{err}</p>}
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-gray-100 text-gray-600 hover:bg-gray-200">ยกเลิก</button>
-            <button type="submit" className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-[#003366] text-white hover:bg-[#002244]">ยืนยันรหัส</button>
+            <button type="submit" className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-black text-white hover:bg-[#333]">ยืนยันรหัส</button>
           </div>
         </form>
       </div>
@@ -1500,8 +1473,8 @@ function PaymentDateModal({ task, isOpen, onClose, onConfirm }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200">
-      <div className="bg-white p-6 md:p-8 rounded-none shadow-2xl border border-emerald-100 w-full max-w-md text-left relative">
-        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
+      <div className="bg-white p-6 md:p-8 brut-panel w-full max-w-md text-left relative">
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-600 hover:bg-gray-100"><X size={18}/></button>
         
         <div className="flex items-center space-x-3 mb-4">
           <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0 border border-emerald-100 shadow-sm">
@@ -1509,14 +1482,14 @@ function PaymentDateModal({ task, isOpen, onClose, onConfirm }) {
           </div>
           <div>
             <h3 className="font-bold text-gray-800 text-lg">ระบุวันที่ทำจ่าย</h3>
-            <p className="text-xs text-gray-400">สถานะ: ส่งเอกสารเบิกจ่ายแล้ว</p>
+            <p className="text-xs text-gray-600">สถานะ: ส่งเอกสารเบิกจ่ายแล้ว</p>
           </div>
         </div>
 
         {/* Task summary */}
-        <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-100 mb-4 space-y-1">
+        <div className="p-3.5 bg-gray-50 rounded-2xl border border-black mb-4 space-y-1">
           <div className="flex justify-between items-center text-xs">
-            <span className="font-bold text-[#003366]">{task.taskNo}</span>
+            <span className="font-bold text-black">{task.taskNo}</span>
             <span className="font-bold text-emerald-600">
               {task.cost ? `฿ ${isNaN(task.cost) ? task.cost : Number(task.cost).toLocaleString()}` : 'ไม่ระบุยอดเงิน'}
             </span>
@@ -1526,7 +1499,7 @@ function PaymentDateModal({ task, isOpen, onClose, onConfirm }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block ml-1">
+            <label className="text-xs font-bold text-gray-600 uppercase tracking-widest block ml-1">
               วันที่ทำจ่าย (วันที่จะได้รับเงิน) *
             </label>
             <input 
@@ -1534,7 +1507,7 @@ function PaymentDateModal({ task, isOpen, onClose, onConfirm }) {
               required 
               value={payDate} 
               onChange={e => setPayDate(e.target.value)} 
-              className="w-full p-3.5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-emerald-500 text-sm font-semibold text-gray-800" 
+              className="w-full p-3.5 bg-gray-50 rounded-2xl border-2 border-black focus:ring-2 focus:ring-emerald-500 text-sm font-semibold text-gray-800" 
             />
             {/* Quick date presets */}
             <div className="flex flex-wrap gap-1.5 pt-1">
@@ -1546,7 +1519,7 @@ function PaymentDateModal({ task, isOpen, onClose, onConfirm }) {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block ml-1">
+            <label className="text-xs font-bold text-gray-600 uppercase tracking-widest block ml-1">
               หมายเหตุการทำจ่าย (ถ้ามี)
             </label>
             <input 
@@ -1554,7 +1527,7 @@ function PaymentDateModal({ task, isOpen, onClose, onConfirm }) {
               value={note} 
               onChange={e => setNote(e.target.value)} 
               placeholder="เช่น รอบโอนวันที่ 15, โอนผ่าน KTB" 
-              className="w-full p-3.5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-emerald-500 text-sm text-gray-700" 
+              className="w-full p-3.5 bg-gray-50 rounded-2xl border-2 border-black focus:ring-2 focus:ring-emerald-500 text-sm text-gray-700" 
             />
           </div>
 
@@ -1603,13 +1576,13 @@ function CancelTaskModal({ task, isOpen, onClose, onConfirm }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-      <div className="bg-white p-8 rounded-none shadow-2xl border border-red-100 w-full max-w-md text-left relative">
-        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
+      <div className="bg-white p-8 brut-panel w-full max-w-md text-left relative">
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-600 hover:bg-gray-100"><X size={18}/></button>
         <div className="flex items-center space-x-3 mb-4">
           <div className="w-12 h-12 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center shrink-0"><AlertTriangle size={24}/></div>
           <div>
             <h3 className="font-bold text-lg text-gray-900">ยกเลิกใบงาน #{task.taskNo}</h3>
-            <p className="text-xs text-gray-400">ระบบจะทำการลบไฟล์ PDF ทั้งหมดใน Storage เพื่อประหยัดพื้นที่</p>
+            <p className="text-xs text-gray-600">ระบบจะทำการลบไฟล์ PDF ทั้งหมดใน Storage เพื่อประหยัดพื้นที่</p>
           </div>
         </div>
 
@@ -1622,7 +1595,7 @@ function CancelTaskModal({ task, isOpen, onClose, onConfirm }) {
               value={reason}
               onChange={e => setReason(e.target.value)}
               placeholder="ระบุสาเหตุ เช่น ร้านค้าไม่สามารถเข้างานได้, ยกเลิกโครงการ, ฯลฯ"
-              className="w-full p-3.5 bg-gray-50 rounded-2xl text-xs md:text-sm border-none focus:ring-2 focus:ring-red-400 resize-none"
+              className="w-full p-3.5 bg-gray-50 rounded-2xl text-xs md:text-sm border-2 border-black focus:ring-2 focus:ring-red-400 resize-none"
             />
           </div>
           <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-200/60 text-amber-800 text-xs leading-relaxed">
@@ -1693,7 +1666,7 @@ function PdfViewerModal({ isOpen, onClose, fileUrlOrId, title, fileName, onDownl
 
   return (
     <div className="fixed inset-0 bg-black/80 flex flex-col items-center justify-center z-[120] p-2 md:p-6 animate-in fade-in duration-200">
-      <div className="bg-[#1e293b] border border-gray-700 w-full max-w-5xl h-[92vh] rounded-none flex flex-col overflow-hidden shadow-2xl relative">
+      <div className="bg-[#1e293b] border border-gray-700 w-full max-w-5xl h-[92vh] flex flex-col overflow-hidden border-4 border-black relative">
         {/* Header bar */}
         <div className="flex items-center justify-between px-5 py-3.5 bg-[#0f172a] border-b border-gray-800 text-white shrink-0">
           <div className="flex items-center space-x-3 truncate">
@@ -1702,7 +1675,7 @@ function PdfViewerModal({ isOpen, onClose, fileUrlOrId, title, fileName, onDownl
             </div>
             <div className="truncate text-left">
               <h3 className="font-bold text-sm truncate text-white">{title || fileName || 'เอกสาร PDF'}</h3>
-              <p className="text-xs text-gray-400">พรีวิวอ่านเอกสารในระบบ (ไม่บันทึกลงหน่วยความจำเครื่อง)</p>
+              <p className="text-xs text-gray-600">พรีวิวอ่านเอกสารในระบบ (ไม่บันทึกลงหน่วยความจำเครื่อง)</p>
             </div>
           </div>
 
@@ -1731,7 +1704,7 @@ function PdfViewerModal({ isOpen, onClose, fileUrlOrId, title, fileName, onDownl
             )}
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+              className="p-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-600 hover:text-white transition-colors"
               title="ปิด"
             >
               <X size={18} />
@@ -1742,7 +1715,7 @@ function PdfViewerModal({ isOpen, onClose, fileUrlOrId, title, fileName, onDownl
         {/* Content Body */}
         <div className="flex-1 bg-slate-900 flex items-center justify-center relative overflow-hidden">
           {loading && (
-            <div className="flex flex-col items-center space-y-3 text-gray-400">
+            <div className="flex flex-col items-center space-y-3 text-gray-600">
               <Loader2 size={36} className="animate-spin text-blue-400" />
               <p className="text-xs">กำลังโหลดเอกสารขึ้นอ่าน...</p>
             </div>
@@ -1925,13 +1898,13 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-      <div className="bg-white p-6 md:p-8 rounded-none shadow-2xl border border-indigo-100 w-full max-w-2xl text-left relative max-h-[92vh] overflow-y-auto">
-        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
+      <div className="bg-white p-6 md:p-8 brut-panel w-full max-w-2xl text-left relative max-h-[92vh] overflow-y-auto">
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-600 hover:bg-gray-100"><X size={18}/></button>
         <div className="flex items-center space-x-3 mb-4">
           <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shrink-0"><PenTool size={22}/></div>
           <div>
             <h3 className="font-bold text-lg text-gray-900">ตรวจรับและเซ็นต์อนุมัติใบเสนอราคา</h3>
-            <p className="text-xs text-gray-400">ใบงาน #{task.taskNo} ({task.company}) • ระบบประทับตราดิจิทัลมาตรฐาน LH</p>
+            <p className="text-xs text-gray-600">ใบงาน #{task.taskNo} ({task.company}) • ระบบประทับตราดิจิทัลมาตรฐาน LH</p>
           </div>
         </div>
 
@@ -1987,7 +1960,7 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
                 onPointerCancel={handlePointerUp}
               />
               {!hasDrawn && (
-                <div className="pointer-events-none absolute text-center text-gray-300">
+                <div className="pointer-events-none absolute text-center text-gray-600">
                   <PenTool size={24} className="mx-auto mb-1 opacity-40"/>
                   <span className="text-xs font-medium">เซ็นต์ชื่อที่นี่...</span>
                 </div>
@@ -2009,7 +1982,7 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
               <label className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 rounded-2xl bg-indigo-50/20 hover:bg-indigo-50/40 p-6 flex flex-col items-center justify-center cursor-pointer transition-all h-40 text-center">
                 <ImageIcon size={32} className="text-indigo-400 mb-2 opacity-80" />
                 <span className="text-xs font-bold text-indigo-700">คลิกเพื่อเลือกไฟล์รูปลายเซ็นต์</span>
-                <span className="text-xs text-gray-400 mt-1">รองรับ PNG (แนะนำพื้นหลังโปร่งแสง), JPG, JPEG, WebP</span>
+                <span className="text-xs text-gray-600 mt-1">รองรับ PNG (แนะนำพื้นหลังโปร่งแสง), JPG, JPEG, WebP</span>
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/jpg"
@@ -2048,7 +2021,7 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
                 value={signerName}
                 onChange={(e) => setSignerName(e.target.value)}
                 placeholder="ชื่อ-นามสกุล ผู้ลงนาม"
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 text-xs bg-white"
+                className="w-full px-3 py-2 border border-black rounded-xl focus:ring-2 focus:ring-indigo-500 text-xs bg-white"
               />
             </div>
             <div>
@@ -2060,7 +2033,7 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
                 value={signerRole}
                 onChange={(e) => setSignerRole(e.target.value)}
                 placeholder="ตำแหน่ง เช่น วิศวกรโครงการ / จัดซื้อ"
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 text-xs bg-white"
+                className="w-full px-3 py-2 border border-black rounded-xl focus:ring-2 focus:ring-indigo-500 text-xs bg-white"
               />
             </div>
           </div>
@@ -2071,7 +2044,7 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
               <select
                 value={placement}
                 onChange={(e) => setPlacement(e.target.value)}
-                className="w-full px-2.5 py-2 border border-gray-200 rounded-xl bg-white text-xs"
+                className="w-full px-2.5 py-2 border border-black rounded-xl bg-white text-xs"
               >
                 <option value="bottom-right">มุมขวาล่าง (แนะนำ)</option>
                 <option value="bottom-left">มุมซ้ายล่าง</option>
@@ -2083,7 +2056,7 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
               <select
                 value={targetPages}
                 onChange={(e) => setTargetPages(e.target.value)}
-                className="w-full px-2.5 py-2 border border-gray-200 rounded-xl bg-white text-xs"
+                className="w-full px-2.5 py-2 border border-black rounded-xl bg-white text-xs"
               >
                 <option value="last">หน้าสุดท้าย (แนะนำ)</option>
                 <option value="first">หน้าแรก</option>
@@ -2096,7 +2069,7 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
                   type="checkbox"
                   checked={includeSeal}
                   onChange={(e) => setIncludeSeal(e.target.checked)}
-                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-black"
                 />
                 <span className="font-semibold text-gray-700 text-xs">ตราประทับ LH V-Track</span>
               </label>
@@ -2128,20 +2101,20 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
             <div className="p-3 grid grid-cols-12 gap-3 items-center">
               <div className="col-span-7 space-y-1 text-xs">
                 <div className="flex">
-                  <span className="text-gray-400 w-24 shrink-0">ผู้ตรวจรับ:</span>
+                  <span className="text-gray-600 w-24 shrink-0">ผู้ตรวจรับ:</span>
                   <span className="font-bold text-gray-900 truncate">{signerName || 'เจ้าหน้าที่โครงการ'}</span>
                 </div>
                 <div className="flex">
-                  <span className="text-gray-400 w-24 shrink-0">ตำแหน่ง:</span>
+                  <span className="text-gray-600 w-24 shrink-0">ตำแหน่ง:</span>
                   <span className="font-medium text-gray-700 truncate">{signerRole || 'ผู้ตรวจรับงาน'}</span>
                 </div>
                 <div className="flex">
-                  <span className="text-gray-400 w-24 shrink-0">วันที่อนุมัติ:</span>
+                  <span className="text-gray-600 w-24 shrink-0">วันที่อนุมัติ:</span>
                   <span className="font-bold text-blue-900">
                     {new Date().toLocaleDateString('th-TH')}
                   </span>
                 </div>
-                <div className="text-xs text-gray-400 font-mono pt-1">
+                <div className="text-xs text-gray-600 font-mono pt-1">
                   SECURITY VERIFIED • DIGITAL AUDIT TRAIL LOCK
                 </div>
               </div>
@@ -2156,9 +2129,9 @@ function SignaturePadModal({ task, isOpen, onClose, onConfirm }) {
                 {currentSigPreview ? (
                   <img src={currentSigPreview} alt="Signature Preview" className="max-h-12 max-w-full object-contain filter drop-shadow-sm" />
                 ) : (
-                  <span className="text-xs text-gray-300">(ลายเซ็นต์)</span>
+                  <span className="text-xs text-gray-600">(ลายเซ็นต์)</span>
                 )}
-                <div className="w-full border-t border-slate-200 mt-1 text-xs text-gray-400 text-center">
+                <div className="w-full border-t border-slate-200 mt-1 text-xs text-gray-600 text-center">
                   (ลายมือชื่อผู้ตรวจรับ)
                 </div>
               </div>
@@ -2225,13 +2198,13 @@ function TaskOrderUploadModal({ task, isOpen, onClose, onConfirm }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-      <div className="bg-white p-6 md:p-8 rounded-none shadow-2xl border border-blue-100 w-full max-w-md text-left relative">
-        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
+      <div className="bg-white p-6 md:p-8 brut-panel w-full max-w-md text-left relative">
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-600 hover:bg-gray-100"><X size={18}/></button>
         <div className="flex items-center space-x-3 mb-4">
           <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shrink-0"><FileText size={22}/></div>
           <div>
             <h3 className="font-bold text-lg text-gray-900">แนบใบงานแจ้งซ่อม & เปิดงานในระบบ</h3>
-            <p className="text-xs text-gray-400">{task.project} — {task.company}</p>
+            <p className="text-xs text-gray-600">{task.project} — {task.company}</p>
           </div>
         </div>
 
@@ -2243,7 +2216,7 @@ function TaskOrderUploadModal({ task, isOpen, onClose, onConfirm }) {
               accept=".pdf,application/pdf"
               required
               onChange={e => setFile(e.target.files[0] || null)}
-              className="w-full p-2.5 bg-gray-50 rounded-2xl text-xs border border-gray-200 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#003366] file:text-white hover:file:bg-[#002244]"
+              className="w-full p-2.5 bg-gray-50 rounded-2xl text-xs border border-black file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-black file:text-white hover:file:bg-[#002244]"
             />
             {file && <span className="text-xs text-green-600 block mt-1">✓ เลือกไฟล์: {file.name} ({(file.size / 1024).toFixed(1)} KB)</span>}
           </div>
@@ -2256,7 +2229,7 @@ function TaskOrderUploadModal({ task, isOpen, onClose, onConfirm }) {
               value={taskNo}
               onChange={e => setTaskNo(e.target.value)}
               placeholder="เช่น JOB-69/001"
-              className="w-full p-3 bg-gray-50 rounded-2xl text-xs md:text-sm border-none focus:ring-2 focus:ring-blue-400"
+              className="w-full p-3 bg-gray-50 rounded-2xl text-xs md:text-sm border-2 border-black focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
@@ -2268,7 +2241,7 @@ function TaskOrderUploadModal({ task, isOpen, onClose, onConfirm }) {
                 required
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
-                className="w-full p-3 bg-gray-50 rounded-2xl text-xs border-none focus:ring-2 focus:ring-blue-400"
+                className="w-full p-3 bg-gray-50 rounded-2xl text-xs border-2 border-black focus:ring-2 focus:ring-blue-400"
               />
             </div>
             <div className="space-y-1">
@@ -2278,7 +2251,7 @@ function TaskOrderUploadModal({ task, isOpen, onClose, onConfirm }) {
                 required
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
-                className="w-full p-3 bg-gray-50 rounded-2xl text-xs border-none focus:ring-2 focus:ring-blue-400"
+                className="w-full p-3 bg-gray-50 rounded-2xl text-xs border-2 border-black focus:ring-2 focus:ring-blue-400"
               />
             </div>
           </div>
@@ -2288,7 +2261,7 @@ function TaskOrderUploadModal({ task, isOpen, onClose, onConfirm }) {
             <button 
               type="submit" 
               disabled={uploading} 
-              className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-[#003366] text-white hover:bg-[#002244] disabled:opacity-50 flex items-center justify-center space-x-1.5"
+              className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-black text-white hover:bg-[#333] disabled:opacity-50 flex items-center justify-center space-x-1.5"
             >
               {uploading ? <span className="animate-spin mr-1">⏳</span> : <CheckCircle2 size={16}/>}
               <span>{uploading ? 'กำลังบันทึก...' : 'ยืนยันเปิดใบงาน'}</span>
@@ -2335,20 +2308,20 @@ function RescheduleModal({ task, isOpen, onClose, onConfirm }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-      <div className="bg-white p-6 md:p-8 rounded-none shadow-2xl border border-amber-100 w-full max-w-md text-left relative">
-        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
+      <div className="bg-white p-6 md:p-8 brut-panel w-full max-w-md text-left relative">
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full text-gray-600 hover:bg-gray-100"><X size={18}/></button>
         <div className="flex items-center space-x-3 mb-4">
           <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shrink-0"><CalendarDays size={22}/></div>
           <div>
             <h3 className="font-bold text-lg text-gray-900">ขอเลื่อนวันเริ่ม / วันจบงาน</h3>
-            <p className="text-xs text-gray-400">ใบงาน #{task.taskNo}</p>
+            <p className="text-xs text-gray-600">ใบงาน #{task.taskNo}</p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="p-3 bg-gray-50 rounded-xl text-xs text-gray-600 space-y-1">
             <p><strong>แผนงานเดิม:</strong> {task.startDate || task.aptDate || '-'} ถึง {task.endDate || task.aptDate || '-'}</p>
-            {task.originalEndDate && <p className="text-gray-400 text-xs">กำหนดการแรกสุดที่ตั้งไว้: {task.originalEndDate}</p>}
+            {task.originalEndDate && <p className="text-gray-600 text-xs">กำหนดการแรกสุดที่ตั้งไว้: {task.originalEndDate}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -2359,7 +2332,7 @@ function RescheduleModal({ task, isOpen, onClose, onConfirm }) {
                 required
                 value={newStartDate}
                 onChange={e => setNewStartDate(e.target.value)}
-                className="w-full p-3 bg-gray-50 rounded-2xl text-xs border-none focus:ring-2 focus:ring-amber-400"
+                className="w-full p-3 bg-gray-50 rounded-2xl text-xs border-2 border-black focus:ring-2 focus:ring-amber-400"
               />
             </div>
             <div className="space-y-1">
@@ -2369,7 +2342,7 @@ function RescheduleModal({ task, isOpen, onClose, onConfirm }) {
                 required
                 value={newEndDate}
                 onChange={e => setNewEndDate(e.target.value)}
-                className="w-full p-3 bg-gray-50 rounded-2xl text-xs border-none focus:ring-2 focus:ring-amber-400"
+                className="w-full p-3 bg-gray-50 rounded-2xl text-xs border-2 border-black focus:ring-2 focus:ring-amber-400"
               />
             </div>
           </div>
@@ -2382,7 +2355,7 @@ function RescheduleModal({ task, isOpen, onClose, onConfirm }) {
               value={reason}
               onChange={e => setReason(e.target.value)}
               placeholder="ระบุเหตุผล เช่น รออะไหล่, หน้างานติดปัญหาฝนตก, ร้านค้าขอเลื่อน ฯลฯ"
-              className="w-full p-3.5 bg-gray-50 rounded-2xl text-xs md:text-sm border-none focus:ring-2 focus:ring-amber-400 resize-none"
+              className="w-full p-3.5 bg-gray-50 rounded-2xl text-xs md:text-sm border-2 border-black focus:ring-2 focus:ring-amber-400 resize-none"
             />
           </div>
 
@@ -2406,7 +2379,7 @@ function RescheduleModal({ task, isOpen, onClose, onConfirm }) {
 function TimelineView({ timeline = [] }) {
   if (!timeline || timeline.length === 0) {
     return (
-      <div className="p-6 text-center text-gray-300 border border-dashed border-gray-100 rounded-2xl">
+      <div className="p-6 text-center text-gray-600 border border-dashed border-black rounded-2xl">
         <History size={32} className="mx-auto mb-2 opacity-30"/>
         <p className="text-xs font-medium">ยังไม่มีประวัติการดำเนินงาน</p>
       </div>
@@ -2434,7 +2407,7 @@ function TimelineView({ timeline = [] }) {
       case 'restored':
         return { icon: RotateCcw, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' };
       default:
-        return { icon: Clock, color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-200' };
+        return { icon: Clock, color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-black' };
     }
   };
 
@@ -2449,7 +2422,7 @@ function TimelineView({ timeline = [] }) {
             <div className={`w-8 h-8 rounded-full ${badge.bg} ${badge.color} border ${badge.border} flex items-center justify-center shrink-0 z-10 shadow-sm`}>
               <Icon size={14}/>
             </div>
-            <div className="flex-1 bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100 text-left">
+            <div className="flex-1 bg-gray-50/80 p-3.5 rounded-2xl border border-black text-left">
               <div className="flex justify-between items-center mb-1">
                 <span className="font-bold text-xs text-gray-800">
                   {ev.type === 'created' && 'สร้างรายการใหม่'}
@@ -2461,7 +2434,7 @@ function TimelineView({ timeline = [] }) {
                   {ev.type === 'cancelled' && 'ยกเลิกใบงาน'}
                   {ev.type === 'restored' && 'กู้คืนใบงาน'}
                 </span>
-                <span className="text-xs text-gray-400 font-medium">{timeStr}</span>
+                <span className="text-xs text-gray-600 font-medium">{timeStr}</span>
               </div>
               {ev.fileName && <p className="text-xs text-gray-600 flex items-center gap-1 mt-0.5"><Paperclip size={11}/> ไฟล์: {ev.fileName}</p>}
               {ev.reason && <p className="text-xs text-red-600 font-medium mt-1">สาเหตุ: {ev.reason}</p>}
@@ -2811,15 +2784,15 @@ function PrintReport({ tasks, printData, onDone }) {
 
       {/* Overview Charts Section */}
       <div className="mb-10">
-        <div className="border border-gray-300 p-6 rounded-lg break-inside-avoid shadow-sm">
+        <div className="border border-black p-6 rounded-lg break-inside-avoid shadow-sm">
           <h3 className="font-bold text-center mb-4 text-base uppercase tracking-wide bg-gray-100 py-2 rounded">สรุปภาพรวมตามตัวกรอง</h3>
-          <div className="text-sm mb-6 text-gray-700 bg-gray-50 p-4 rounded border border-gray-200">
+          <div className="text-sm mb-6 text-gray-700 bg-gray-50 p-4 rounded border border-black">
             <p className="mb-2"><strong>ประจำเดือน:</strong> {selectedMonth ? new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(selectedMonth)) : 'ทุกเดือน'}</p>
             <p className="mb-2"><strong>โครงการ:</strong> {filterProj || 'ทั้งหมด'} | <strong>ร้านค้า:</strong> {filterComp || 'ทั้งหมด'}</p>
             <p><strong>สถานะ:</strong> {filterStatus || 'ทุกสถานะ'}</p>
           </div>
           <div className="flex flex-col md:flex-row items-center justify-center gap-10">
-            <div className="relative w-40 h-40 rounded-full border border-gray-200 shadow-inner flex-shrink-0" style={pieStyle}>
+            <div className="relative w-40 h-40 rounded-full border border-black shadow-inner flex-shrink-0" style={pieStyle}>
                <div className="absolute inset-4 bg-white rounded-full flex flex-col items-center justify-center">
                   <span className="font-bold text-3xl">{filteredTasks.length}</span>
                </div>
@@ -2829,8 +2802,8 @@ function PrintReport({ tasks, printData, onDone }) {
                <table className="w-full text-left">
                  <tbody>
                    {filteredStats.filter(s => s.count > 0).map(s => (
-                     <tr key={s.id} className="border-b border-dashed border-gray-200 last:border-0">
-                       <td className="py-3 flex items-center gap-2 truncate"><div className="w-4 h-4 rounded-sm border border-gray-200 shadow-sm" style={{backgroundColor: s.color}}></div>{s.name}</td>
+                     <tr key={s.id} className="border-b border-dashed border-black last:border-0">
+                       <td className="py-3 flex items-center gap-2 truncate"><div className="w-4 h-4 rounded-sm border border-black shadow-sm" style={{backgroundColor: s.color}}></div>{s.name}</td>
                        <td className="py-3 text-right font-bold w-16 text-base">{s.count}</td>
                        <td className="py-3 text-right text-gray-500 w-16">{s.percent}%</td>
                      </tr>
@@ -2844,7 +2817,7 @@ function PrintReport({ tasks, printData, onDone }) {
 
       {/* Filtered Tasks Formal Table */}
       <div className="mt-10">
-        <h3 className="font-bold text-lg md:text-xl mb-4 flex items-center text-black border-b border-gray-300 pb-2">
+        <h3 className="font-bold text-lg md:text-xl mb-4 flex items-center text-black border-b border-black pb-2">
           รายละเอียดใบงานทั้งหมด <span className="text-sm md:text-base font-normal text-gray-500 ml-2">({filteredTasks.length} รายการ)</span>
         </h3>
         {filteredTasks.length > 0 ? (
@@ -2894,7 +2867,7 @@ function PrintReport({ tasks, printData, onDone }) {
 
 // -------------------------------------------------------------
 
-function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
+function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked, onSave, onEdit, onRequestCancel, onRequestDisbursement }) {
   const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
 
   const availableMonths = useMemo(() => {
@@ -3064,7 +3037,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
           </div>
           <div className="brut bg-[#BDE3FF] p-4">
             <div className="text-sm font-extrabold flex items-center justify-between">มูลค่าเบิกจ่ายในงวด <DollarSign size={18}/></div>
-            <div className="num text-2xl font-black mt-1 break-all">฿ {totalMonthBudget.toLocaleString()}</div>
+            <div className="num text-xl font-black mt-1 whitespace-nowrap">฿ {totalMonthBudget.toLocaleString()}</div>
             <div className="mt-2 pt-2 border-t-2 border-black text-sm font-bold flex justify-between"><span>ส่งเบิกจ่ายแล้ว</span><span className="num">{disbursedCount} งาน</span></div>
           </div>
         </div>
@@ -3081,12 +3054,12 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
           {/* Period Selector */}
           <div className="space-y-1">
             <label className="text-xs font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
-              <CalendarDays size={12} className="mr-1 text-[#B08731]"/> งวดเดือน
+              <CalendarDays size={12} className="mr-1 text-[#111]"/> งวดเดือน
             </label>
             <select 
               value={selectedMonth} 
               onChange={e => setSelectedMonth(e.target.value)} 
-              className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#B08731] focus:ring-1 focus:ring-[#B08731] text-xs font-semibold text-[#002447] transition-all"
+              className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#111] focus:ring-1 focus:ring-[#111] text-xs font-semibold text-black transition-all"
             >
               {availableMonths.map(m => (
                 <option key={m} value={m}>
@@ -3099,12 +3072,12 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
           {/* Project / Estate Selector */}
           <div className="space-y-1">
             <label className="text-xs font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
-              <Building2 size={12} className="mr-1 text-[#B08731]"/> โครงการ
+              <Building2 size={12} className="mr-1 text-[#111]"/> โครงการ
             </label>
             <select 
               value={filterProj} 
               onChange={e => setFilterProj(e.target.value)} 
-              className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#B08731] focus:ring-1 focus:ring-[#B08731] text-xs font-semibold text-[#002447] transition-all"
+              className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#111] focus:ring-1 focus:ring-[#111] text-xs font-semibold text-black transition-all"
             >
               <option value="">ทุกโครงการ Land & Houses</option>
               {settings.projects.map(p => <option key={p} value={p}>{p}</option>)}
@@ -3114,12 +3087,12 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
           {/* Vendor / Contractor Selector */}
           <div className="space-y-1">
             <label className="text-xs font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
-              <Briefcase size={12} className="mr-1 text-[#B08731]"/> ร้านค้า
+              <Briefcase size={12} className="mr-1 text-[#111]"/> ร้านค้า
             </label>
             <select 
               value={filterComp} 
               onChange={e => setFilterComp(e.target.value)} 
-              className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#B08731] focus:ring-1 focus:ring-[#B08731] text-xs font-semibold text-[#002447] transition-all"
+              className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#111] focus:ring-1 focus:ring-[#111] text-xs font-semibold text-black transition-all"
             >
               <option value="">ทุกร้านค้า / ผู้รับเหมา</option>
               {settings.companies.map(c => <option key={c} value={c}>{c}</option>)}
@@ -3129,7 +3102,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
           {/* Keyword Search */}
           <div className="space-y-1">
             <label className="text-xs font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
-              <Search size={12} className="mr-1 text-[#B08731]"/> ค้นหา
+              <Search size={12} className="mr-1 text-[#111]"/> ค้นหา
             </label>
             <div className="relative">
               <input 
@@ -3137,11 +3110,11 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 placeholder="ค้นหาเลขใบงาน, ร้านค้า, พื้นที่..."
-                className="w-full p-2.5 pl-8 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#B08731] focus:ring-1 focus:ring-[#B08731] text-xs font-medium text-[#002447] placeholder:text-gray-400 transition-all"
+                className="w-full p-2.5 pl-8 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#111] focus:ring-1 focus:ring-[#111] text-xs font-medium text-black placeholder:text-gray-600 transition-all"
               />
-              <Search size={13} className="absolute left-2.5 top-3 text-gray-400 pointer-events-none" />
+              <Search size={13} className="absolute left-2.5 top-3 text-gray-600 pointer-events-none" />
               {searchTerm && (
-                <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-3 text-gray-400 hover:text-gray-600">
+                <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-3 text-gray-600 hover:text-gray-600">
                   <X size={13} />
                 </button>
               )}
@@ -3153,14 +3126,14 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
         <div className="pt-2 border-t border-black flex flex-wrap items-center justify-between gap-2 relative z-10">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs font-mono-tech text-[#8C7B63] uppercase mr-1 flex items-center">
-              <Filter size={11} className="mr-1 text-[#B08731]" /> กรองด่วน:
+              <Filter size={11} className="mr-1 text-[#111]" /> กรองด่วน:
             </span>
 
             <button
               onClick={() => setQuickFilter('all')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 quickFilter === 'all' 
-                  ? 'bg-[#002447] text-white shadow-xs' 
+                  ? 'bg-black text-white shadow-xs' 
                   : 'bg-[#FAF8F5] text-gray-600 hover:bg-gray-100 border border-black'
               }`}
             >
@@ -3243,7 +3216,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                 setQuickFilter('all');
                 setSearchTerm('');
               }}
-              className="text-xs font-semibold text-[#B08731] hover:underline flex items-center gap-1 py-1"
+              className="text-xs font-semibold text-[#111] hover:underline flex items-center gap-1 py-1"
             >
               <RotateCcw size={11} /> ล้างตัวกรองทั้งหมด
             </button>
@@ -3259,28 +3232,28 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
         <div className="lg:col-span-5 asym-card p-6 md:p-7 border border-black shadow-sm flex flex-col bg-white relative overflow-hidden">
           {/* Subtle Dynamic Ribbon Curve in Card Background */}
           <svg className="absolute -top-10 -right-10 w-60 h-60 pointer-events-none opacity-20" viewBox="0 0 200 200">
-            <path d="M 0,100 C 50,20 150,180 200,100" stroke="#B08731" strokeWidth="1.5" fill="none" className="animate-wave-flow" />
+            <path d="M 0,100 C 50,20 150,180 200,100" stroke="#111" strokeWidth="1.5" fill="none" className="animate-wave-flow" />
           </svg>
 
           <div className="flex items-center justify-between pb-4 border-b border-black mb-5 relative z-10">
             <div>
-              <h4 className=" font-bold text-lg md:text-xl text-[#002447]">สัดส่วนสถานะงาน</h4>
+              <h4 className=" font-bold text-lg md:text-xl text-black">สัดส่วนสถานะงาน</h4>
               <p className="text-xs font-mono-tech text-[#8C7B63] tracking-widest uppercase">DISPATCH METRICS & RATIOS</p>
             </div>
-            <span className="text-xs font-mono-tech text-[#002447] bg-[#FAF8F5] border border-black px-2.5 py-1 rounded-none font-bold">
+            <span className="text-xs font-mono-tech text-black bg-[#FAF8F5] border border-black px-2.5 py-1 rounded-none font-bold">
               ⊕ {baseFilteredTasks.length} TASKS
             </span>
           </div>
           
           {/* Donut Chart with Precision Brass Ring Rim */}
           <div className="relative my-3 mx-auto flex items-center justify-center z-10">
-            <div className="p-3.5 rounded-full border-2 border-[#B08731]/40 bg-[#FAF8F5] shadow-inner relative">
+            <div className="p-3.5 rounded-full border-2 border-[#111]/40 bg-[#FAF8F5] shadow-inner relative">
               <div 
                 className="relative w-44 h-44 rounded-full shadow-md flex items-center justify-center transition-all duration-700" 
                 style={pieStyle}
               >
                 <div className="w-28 h-28 bg-white rounded-full flex flex-col items-center justify-center shadow-sm border border-black z-10">
-                  <span className="text-3xl  font-bold text-[#002447]">{baseFilteredTasks.length}</span>
+                  <span className="text-3xl  font-bold text-black">{baseFilteredTasks.length}</span>
                   <span className="text-xs font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider mt-0.5">ใบงานรวม</span>
                 </div>
               </div>
@@ -3299,7 +3272,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                 <div 
                   key={s.id} 
                   className={`flex items-center justify-between p-2 rounded-lg transition-all ${
-                    hasItems ? 'bg-[#FAF8F5]/80 hover:bg-[#FAF8F5] text-gray-800' : 'text-gray-400 opacity-40'
+                    hasItems ? 'bg-[#FAF8F5]/80 hover:bg-[#FAF8F5] text-gray-800' : 'text-gray-600 opacity-40'
                   }`}
                 >
                   <div className="flex items-center space-x-2.5 min-w-0 pr-2">
@@ -3310,7 +3283,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                     <span className="text-xs font-medium truncate">{s.name}</span>
                   </div>
                   <div className="flex items-center space-x-2 shrink-0">
-                    <span className="font-mono-tech font-bold text-xs text-[#002447]">{s.count}</span>
+                    <span className="font-mono-tech font-bold text-xs text-black">{s.count}</span>
                     <span className="text-xs font-mono-tech bg-white px-1.5 py-0.5 rounded border border-black text-[#8C7B63] min-w-[36px] text-right">
                       {s.percent}%
                     </span>
@@ -3322,9 +3295,9 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
 
           {/* Schedule & Disbursement Quick Highlights */}
           <div className="mt-5 p-3.5 bg-[#FAF8F5] rounded-xl border border-black space-y-2 relative z-10 text-xs">
-            <div className="text-xs font-mono-tech font-bold text-[#B08731] uppercase tracking-wider flex items-center gap-1">
+            <div className="text-xs font-mono-tech font-bold text-[#111] uppercase tracking-wider flex items-center gap-1">
               <span>⌖ HIGHLIGHTS</span>
-              <span className="text-gray-400">• สรุปงวดและนัดหมาย</span>
+              <span className="text-gray-600">• สรุปงวดและนัดหมาย</span>
             </div>
             <div className="flex items-center justify-between text-gray-700">
               <span className="text-xs text-gray-500">งานที่มีวันทำจ่ายยืนยัน:</span>
@@ -3334,7 +3307,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
             </div>
             <div className="flex items-center justify-between text-gray-700">
               <span className="text-xs text-gray-500">งานที่มีนัดหมายเข้าทำ:</span>
-              <span className="font-mono-tech font-bold text-[#002447]">
+              <span className="font-mono-tech font-bold text-black">
                 {baseFilteredTasks.filter(t => t.startDate || t.aptDate).length} งาน
               </span>
             </div>
@@ -3346,13 +3319,13 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
           <div className="p-5 md:p-6 border-b-2 border-black bg-[#FFD93D] flex justify-between items-center">
             <div className="flex flex-col">
               <span className="tech-stamp">MONTHLY OPERATIONS STREAM</span>
-              <h4 className=" font-bold text-lg md:text-xl text-[#002447] mt-0.5">
+              <h4 className=" font-bold text-lg md:text-xl text-black mt-0.5">
                 สารบบใบงานประจำงวด
               </h4>
-              <p className="text-xs text-[#B08731] font-medium">{selectedMonthFormatted}</p>
+              <p className="text-xs text-[#111] font-medium">{selectedMonthFormatted}</p>
             </div>
             <div className="flex items-center space-x-2">
-              <span className="text-xs font-mono-tech bg-white px-3 py-1.5 rounded-none border border-black text-[#002447] font-bold">
+              <span className="text-xs font-mono-tech bg-white px-3 py-1.5 rounded-none border border-black text-black font-bold">
                 ⊕ {finalFilteredTasks.length} RECORDS
               </span>
             </div>
@@ -3393,22 +3366,22 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                         
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-gray-600">
                           <div className="flex items-center space-x-1.5 bg-[#FAF8F5] px-2.5 py-1 rounded-none border border-black">
-                            <Briefcase size={12} className="text-[#B08731]" />
-                            <span className="text-xs font-bold uppercase tracking-wider truncate max-w-[130px] text-[#002447]">{t.company}</span>
+                            <Briefcase size={12} className="text-[#111]" />
+                            <span className="text-xs font-bold uppercase tracking-wider truncate max-w-[130px] text-black">{t.company}</span>
                           </div>
                           <div className="flex items-center space-x-1.5 bg-[#FAF8F5] px-2.5 py-1 rounded-none border border-black">
-                            <Building2 size={12} className="text-[#002447]" />
+                            <Building2 size={12} className="text-black" />
                             <span className="text-xs font-medium truncate max-w-[160px] text-gray-700">{t.project}</span>
                           </div>
                           {t.startDate && t.endDate ? (
                             <div className="flex items-center space-x-1 bg-[#FAF8F5] px-2.5 py-1 rounded-none border border-black text-xs font-semibold text-gray-600">
-                              <CalendarDays size={11} className="text-[#B08731]" />
+                              <CalendarDays size={11} className="text-[#111]" />
                               <span>{t.startDate} - {t.endDate}</span>
                             </div>
                           ) : (
                             t.aptDate && (
                               <div className="flex items-center space-x-1 bg-[#FAF8F5] px-2.5 py-1 rounded-none border border-black text-xs font-semibold text-gray-600">
-                                <CalendarDays size={11} className="text-[#B08731]" />
+                                <CalendarDays size={11} className="text-[#111]" />
                                 <span>{t.aptDate}</span>
                               </div>
                             )
@@ -3452,19 +3425,33 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                           <StatusTag label={t.status} />
                         </div>
                         <div className="flex items-center space-x-1.5 bg-white px-2.5 py-1 border border-black">
-                          <MapPin size={10} className="text-[#B08731]" />
-                          <span className="text-xs text-[#002447] font-bold tracking-wide">{t.area}</span>
+                          <MapPin size={10} className="text-[#111]" />
+                          <span className="text-xs text-black font-bold tracking-wide">{t.area}</span>
                         </div>
                       </div>
+
+                      {isUnlocked && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex flex-wrap items-center gap-2 border-t-2 border-black pt-3 bg-[#FFFBEB] -mx-4 -mb-4 px-4 pb-4"
+                        >
+                          <span className="text-xs font-extrabold">แอดมิน:</span>
+                          <div className="flex-1 min-w-[180px] max-w-xs">
+                            <InlineStatusSelect task={t} onSave={onSave} onRequestCancel={onRequestCancel} onRequestDisbursement={onRequestDisbursement} />
+                          </div>
+                          <button onClick={() => onEdit(t)} className="brut-btn min-h-12 px-4 bg-white text-sm font-extrabold flex items-center gap-1.5"><Edit size={16}/><span>แก้ไข</span></button>
+                          <button onClick={() => onRequestCancel(t)} className="brut-btn min-h-12 px-4 bg-[#FF5C5C] text-sm font-extrabold flex items-center gap-1.5"><Trash2 size={16}/><span>ยกเลิก</span></button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center py-24 text-gray-400">
-                <CalendarDays size={48} className="mb-3 text-[#B08731]/30"/>
-                <p className=" text-base font-bold text-[#002447]">ไม่พบข้อมูลใบงานตามเงื่อนไขที่เลือก</p>
-                <p className="text-xs font-mono-tech text-gray-400 mt-1 uppercase">NO CORRESPONDING RECORDS FOUND</p>
+              <div className="flex-1 flex flex-col items-center justify-center py-24 text-gray-600">
+                <CalendarDays size={48} className="mb-3 text-[#111]/30"/>
+                <p className=" text-base font-bold text-black">ไม่พบข้อมูลใบงานตามเงื่อนไขที่เลือก</p>
+                <p className="text-xs font-mono-tech text-gray-600 mt-1 uppercase">NO CORRESPONDING RECORDS FOUND</p>
                 {(filterProj || filterComp || quickFilter !== 'all' || searchTerm) && (
                   <button
                     onClick={() => {
@@ -3473,7 +3460,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule }) {
                       setQuickFilter('all');
                       setSearchTerm('');
                     }}
-                    className="mt-3 text-xs bg-white text-[#B08731] font-bold px-3 py-1.5 rounded-lg border border-black hover:bg-[#FAF8F5]"
+                    className="mt-3 text-xs bg-white text-[#111] font-bold px-3 py-1.5 rounded-lg border border-black hover:bg-[#FAF8F5]"
                   >
                     ล้างตัวกรองเพื่อดูทั้งหมด
                   </button>
@@ -3524,15 +3511,13 @@ function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = 
   };
 
   return (
-    <form onSubmit={sub} className={`asym-card p-6 md:p-10 border border-black shadow-sm space-y-6 w-full max-w-3xl mx-auto bg-white relative overflow-hidden ${isModal ? '' : 'mb-24'}`}>
-      <div className="absolute top-0 right-0 w-48 h-48 bg-drafting-grid opacity-20 pointer-events-none"></div>
-      <div className="flex items-center space-x-4 mb-2 relative z-10">
-        <div className="w-12 h-12 bg-[#002447] text-[#C5A059] rounded-xl flex items-center justify-center shrink-0 border border-[#C5A059]/30 shadow-sm">
+    <form onSubmit={sub} className={`brut-panel p-5 md:p-8 space-y-6 w-full max-w-3xl mx-auto bg-white relative ${isModal ? 'md:my-6' : 'mb-24'}`}>
+      <div className="flex items-center space-x-4 mb-2 relative z-10 border-b-4 border-black pb-4">
+        <div className="w-12 h-12 bg-[#FFD93D] text-black flex items-center justify-center shrink-0 border-2 border-black">
           {initialData ? <Edit size={22}/> : <PlusCircle size={22}/>}
         </div>
         <div>
-          <span className="tech-stamp">{initialData ? 'RECORD SPECIFICATION UPDATE' : 'NEW DISPATCH INITIATION'}</span>
-          <h3 className=" font-bold text-xl md:text-2xl text-[#002447] text-left">
+                    <h3 className=" font-bold text-xl md:text-2xl text-black text-left">
             {initialData ? 'แก้ไขข้อมูลใบงาน' : 'เปิดรายการใหม่ (รอใบเสนอราคา)'}
           </h3>
         </div>
@@ -3599,229 +3584,15 @@ function TaskForm({ settings, onSave, onSuccess, initialData = null, onCancel = 
       </div>
       
       <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6">
-        {onCancel && <button type="button" onClick={onCancel} className="px-8 py-4 rounded-2xl text-gray-400 font-bold hover:bg-gray-50 order-2 sm:order-1">ยกเลิก</button>}
-        <button type="submit" className="bg-[#003366] text-white px-12 py-4 rounded-2xl font-bold order-1 sm:order-2">บันทึกข้อมูล</button>
+        {onCancel && <button type="button" onClick={onCancel} className="brut-btn px-8 min-h-12 bg-white font-extrabold order-2 sm:order-1">ยกเลิก</button>}
+        <button type="submit" className="brut-btn bg-[#FFD93D] px-12 min-h-12 font-extrabold order-1 sm:order-2">บันทึกข้อมูล</button>
       </div>
-      <style>{`.input-style { @apply w-full p-4 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] transition-all text-sm font-semibold text-gray-700 placeholder:text-gray-300; }`}</style>
     </form>
   );
 }
 
 function Field({ label, children }) {
-  return <div className="space-y-2 text-left"><label className="block text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">{label}</label>{children}</div>;
-}
-
-// -----------------------------------------------------------------
-
-function Management({ tasks, settings, onSave, onDelete, onViewDetail, onRequestCancel, onRequestDisbursement }) {
-  const [edit, setEdit] = useState(null);
-  const [search, setSearch] = useState('');
-  const [filterMonth, setFilterMonth] = useState('');
-  const [filterProject, setFilterProject] = useState('');
-  const [filterCompany, setFilterCompany] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
-
-  const availableMonths = useMemo(() => {
-    const months = tasks
-      .filter(t => !t.isDeleted && t.status !== 'ยกเลิก')
-      .map(t => getEffectiveMonth(t))
-      .filter(m => m !== '');
-    return [...new Set(months)].sort().reverse();
-  }, [tasks]);
-  
-  const filtered = useMemo(() => {
-    return tasks.filter(t => {
-      if (t.isDeleted) return false;
-      const matchSearch = search === '' || t.taskNo.toLowerCase().includes(search.toLowerCase()) || t.project.toLowerCase().includes(search.toLowerCase());
-      const tMonth = getEffectiveMonth(t);
-      const matchMonth = filterMonth === '' || tMonth === filterMonth;
-      const matchProj = filterProject === '' || t.project === filterProject;
-      const matchComp = filterCompany === '' || t.company === filterCompany;
-      const matchStat = filterStatus === '' || t.status === filterStatus;
-      return matchSearch && matchMonth && matchProj && matchComp && matchStat;
-    });
-  }, [tasks, search, filterMonth, filterProject, filterCompany, filterStatus]);
-
-  useEffect(() => { setCurrentPage(1); }, [search, filterMonth, filterProject, filterCompany, filterStatus]);
-
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const currentItems = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  if (edit) return <TaskForm settings={settings} initialData={edit} onSave={onSave} onSuccess={()=>setEdit(null)} onCancel={()=>setEdit(null)} />;
-
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500 mb-20">
-      <div className="asym-card p-6 md:p-7 border border-black shadow-sm flex flex-col gap-4 bg-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-drafting-grid opacity-20 pointer-events-none"></div>
-        <div className="relative z-10 flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <span className="tech-stamp">TASK REGISTER & MANAGEMENT</span>
-              <h3 className=" text-xl md:text-2xl font-bold text-[#002447]">
-                จัดการข้อมูลใบงาน V-TRACK
-              </h3>
-            </div>
-            <span className="text-xs font-mono-tech text-[#002447] bg-[#FAF8F5] border border-black px-3 py-1.5 rounded-none font-bold self-start sm:self-auto">
-              ⊕ {filtered.length} ITEMS MATCHED
-            </span>
-          </div>
-
-          <div className="relative">
-            <Search size={18} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-[#C5A059]" />
-            <input 
-              placeholder="ค้นหาตามเลขที่ใบงาน หรือชื่อโครงการ..." 
-              className="w-full pl-12 pr-6 py-3.5 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-sm text-[#002447] font-medium transition-all" 
-              value={search} 
-              onChange={e=>setSearch(e.target.value)} 
-            />
-          </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-            <select value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="p-3 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447]"><option value="">ทุกเดือน</option>{availableMonths.map(m => <option key={m} value={m}>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}</option>)}</select>
-            <select value={filterProject} onChange={e=>setFilterProject(e.target.value)} className="p-3 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447]"><option value="">ทุกโครงการ</option>{settings.projects.map(p => <option key={p} value={p}>{p}</option>)}</select>
-            <select value={filterCompany} onChange={e=>setFilterCompany(e.target.value)} className="p-3 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447]"><option value="">ทุกร้านค้า</option>{settings.companies.map(c => <option key={c} value={c}>{c}</option>)}</select>
-            <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="p-3 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] text-xs font-semibold text-[#002447]"><option value="">ทุกสถานะ</option>{STATUSES.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select>
-          </div>
-        </div>
-      </div>
-
-      <div className="asym-card-inverse bg-white rounded-2xl shadow-sm border border-black overflow-hidden">
-        {/* Table Desktop: Fixed Layout */}
-        <div className="hidden md:block w-full">
-          <table className="w-full text-left text-sm table-fixed">
-            <thead className="bg-[#FAF8F5] text-[#8C7B63] text-xs uppercase font-mono-tech tracking-wider border-b border-black">
-              <tr>
-                <th className="w-2/12 px-6 py-4">เลขที่ใบงาน</th>
-                <th className="w-3/12 px-6 py-4">โครงการ / แผนงาน</th>
-                <th className="w-2/12 px-6 py-4">รายละเอียด</th>
-                <th className="w-1/12 px-6 py-4 text-right">ค่าใช้จ่าย</th>
-                <th className="w-2/12 px-6 py-4 text-center">สถานะ</th>
-                <th className="w-2/12 px-6 py-4 text-center">จัดการ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {currentItems.map(t=>{
-                const isSchedOver = isScheduleOverdue(t);
-                return (
-                  <tr key={t.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-5 font-bold text-[#003366] truncate pr-2">
-                      <div className="flex items-center space-x-1.5">
-                        <span className="truncate">{t.taskNo}</span>
-                      </div>
-                      {isSchedOver && <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-none mt-1 w-max block font-bold">⚠️ เกินกำหนดจบงาน</span>}
-                      {!isSchedOver && isOverdue(t) && <span className="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-none mt-1 w-max block">เกินกำหนด</span>}
-                      {isCarryOver(t) && <span className="bg-orange-100 text-orange-600 text-xs px-2 py-0.5 rounded-none mt-1 w-max block">งานค้างจาก {getOriginalMonthStr(t)}</span>}
-                      
-                      {/* Attached files icons */}
-                      <div className="flex gap-1 mt-1.5">
-                        {t.quoteFileUrl && <span title="มีใบเสนอราคา" className="text-amber-500"><Paperclip size={12}/></span>}
-                        {t.signedFileUrl && <span title="เซ็นต์อนุมัติแล้ว" className="text-indigo-600"><ShieldCheck size={12}/></span>}
-                        {t.taskFileUrl && <span title="มีใบงานแจ้งซ่อม" className="text-blue-600"><FileText size={12}/></span>}
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 text-gray-700 truncate pr-2" title={t.project}>
-                      <span className="font-semibold block truncate">{t.project}</span>
-                      <span className="text-xs text-gray-400 block truncate">{t.company}</span>
-                      {t.startDate && t.endDate ? (
-                        <span className="text-xs text-gray-400 font-mono mt-0.5 block">{t.startDate} ถึง {t.endDate}</span>
-                      ) : (
-                        t.aptDate && <span className="text-xs text-gray-400 font-mono mt-0.5 block">{t.aptDate}</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-5 text-gray-500 text-xs truncate pr-2" title={t.details}>{t.details || '-'}</td>
-                    <td className="px-6 py-5 text-right font-semibold text-[#003366] whitespace-nowrap">{t.cost ? (isNaN(t.cost) ? t.cost : Number(t.cost).toLocaleString()) : '-'}</td>
-                    <td className="px-6 py-5 text-center">
-                      <InlineStatusSelect task={t} onSave={onSave} onRequestCancel={onRequestCancel} onRequestDisbursement={onRequestDisbursement} />
-                    </td>
-                    <td className="px-6 py-5 text-center space-x-1.5">
-                      <button onClick={()=>onViewDetail(t)} title="ดูรายละเอียด & เอกสาร" className="p-2 text-gray-400 hover:text-[#003366] transition-colors"><Eye size={18}/></button>
-                      <button onClick={()=>setEdit(t)} title="แก้ไขข้อมูล" className="p-2 text-gray-400 hover:text-[#C5A059] transition-colors"><Edit size={18}/></button>
-                      <button onClick={()=>onRequestCancel(t)} title="ยกเลิกใบงาน" className="p-2 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile View */}
-        <div className="md:hidden p-4 space-y-4 bg-gray-50/30 text-left">
-          {currentItems.map(t => {
-            const isSchedOver = isScheduleOverdue(t);
-            return (
-              <div key={t.id} className="group relative p-5 bg-white/80 rounded-2xl border border-gray-100/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col gap-3">
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-black"></div>
-                
-                <div className="flex justify-between items-start pl-2">
-                  <div className="flex flex-col min-w-0 pr-2">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className="font-bold text-[#003366] text-base truncate">{t.taskNo}</span>
-                      {isSchedOver && <span className="bg-amber-500/10 text-amber-700 text-xs px-2 py-0.5 rounded-none font-bold">⚠️ เลยกำหนด</span>}
-                      {!isSchedOver && isOverdue(t) && <span className="bg-red-500/10 text-red-500 text-xs px-2 py-0.5 rounded-none font-bold">เลยกำหนด</span>}
-                      {isCarryOver(t) && <span className="bg-orange-500/10 text-orange-600 text-xs px-2 py-0.5 rounded-none font-bold">งานค้างจาก {getOriginalMonthStr(t)}</span>}
-                    </div>
-                    <div className="text-xs text-gray-500 truncate flex items-center space-x-1"><Building2 size={10} className="text-[#003366]"/><span>{t.project} ({t.company})</span></div>
-                    {t.startDate && t.endDate && (
-                      <div className="text-xs text-gray-400 mt-0.5 font-mono">{t.startDate} - {t.endDate}</div>
-                    )}
-                  </div>
-                  <div className="shrink-0 mt-1"><InlineStatusSelect task={t} onSave={onSave} onRequestCancel={onRequestCancel} onRequestDisbursement={onRequestDisbursement} /></div>
-                </div>
-
-                {/* Badges for attachments on mobile */}
-                <div className="flex flex-wrap gap-1 pl-2">
-                  {t.quoteFileUrl && <span className="text-xs bg-amber-100/90 text-amber-900 px-1.5 py-0.5 rounded-none font-bold border-t border-amber-200 border-b border-amber-400">ใบเสนอราคา</span>}
-                  {t.signedFileUrl && <span className="text-xs bg-indigo-100/90 text-indigo-900 px-1.5 py-0.5 rounded-none font-bold border-t border-indigo-200 border-b border-indigo-400">เซ็นต์แล้ว</span>}
-                  {t.taskFileUrl && <span className="text-xs bg-blue-100/90 text-blue-900 px-1.5 py-0.5 rounded-none font-bold border-t border-blue-200 border-b border-blue-400">มีใบงาน</span>}
-                </div>
-                
-                {t.details && <div className="text-xs text-gray-500 bg-gray-50/80 p-3 rounded-xl border border-gray-100 line-clamp-2 pl-2 mx-2">{t.details}</div>}
-                
-                <div className="flex justify-between items-center mt-2 pl-2">
-                  <div className="flex gap-2">
-                    <div className="text-xs text-gray-400 font-bold bg-gray-50 px-2 py-1.5 rounded-lg flex items-center space-x-1 border border-gray-100"><MapPin size={10}/><span>{t.area}</span></div>
-                    {t.cost && <div className="text-xs text-green-600 font-bold bg-green-50 px-2 py-1.5 rounded-lg flex items-center space-x-1 border border-green-100"><span>฿ {isNaN(t.cost) ? t.cost : Number(t.cost).toLocaleString()}</span></div>}
-                  </div>
-                  <div className="flex space-x-1.5">
-                    <button onClick={()=>onViewDetail(t)} title="ดูรายละเอียด" className="p-2.5 bg-gray-50 rounded-xl text-gray-500 hover:text-[#003366] hover:bg-gray-100 transition-colors"><Eye size={16}/></button>
-                    <button onClick={()=>setEdit(t)} title="แก้ไข" className="p-2.5 bg-gray-50 rounded-xl text-gray-500 hover:text-[#C5A059] hover:bg-gray-100 transition-colors"><Edit size={16}/></button>
-                    <button onClick={()=>onRequestCancel(t)} title="ยกเลิก" className="p-2.5 bg-red-50 rounded-xl text-red-400 hover:text-red-600 hover:bg-red-100 transition-colors"><Trash2 size={16}/></button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 bg-gray-50/30">
-            <span className="text-xs font-bold text-gray-400 mb-4 sm:mb-0">
-              แสดง {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filtered.length)} จาก {filtered.length}
-            </span>
-            <div className="flex items-center space-x-1.5">
-              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="w-8 h-8 flex items-center justify-center rounded-xl bg-white border border-gray-200 disabled:opacity-30"><ChevronLeft size={16}/></button>
-              {[...Array(totalPages)].map((_, i) => {
-                const pageNum = i + 1;
-                if (totalPages > 5 && (pageNum < currentPage - 2 || pageNum > currentPage + 2)) {
-                  if (pageNum === 1 || pageNum === totalPages) return <span key={i} className="text-gray-300 text-xs">...</span>;
-                  return null;
-                }
-                return (
-                  <button key={i} onClick={() => setCurrentPage(pageNum)} className={`w-8 h-8 rounded-xl text-xs font-bold ${currentPage === pageNum ? 'bg-[#003366] text-white' : 'bg-white border border-gray-200 text-gray-500'}`}>{pageNum}</button>
-                );
-              })}
-              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="w-8 h-8 flex items-center justify-center rounded-xl bg-white border border-gray-200 disabled:opacity-30"><ChevronRight size={16}/></button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return <div className="space-y-2 text-left"><label className="block text-sm font-extrabold">{label}</label>{children}</div>;
 }
 
 function StatusTag({ label }) {
@@ -3866,110 +3637,6 @@ function StatusTag({ label }) {
   );
 }
 
-function CalendarView({ tasks, onViewDetail }) {
-  const [now, setNow] = useState(new Date());
-  const [selectedDayTasks, setSelectedDayTasks] = useState(null);
-  
-  const y = now.getFullYear(); const m = now.getMonth();
-  const daysIn = new Date(y, m + 1, 0).getDate();
-  const first = new Date(y, m, 1).getDay();
-  const grid = [...Array(first).fill(null), ...Array(daysIn).keys()].map(i => i === null ? null : i + 1);
-
-  return (
-    <div className="asym-card p-5 md:p-8 border border-black shadow-sm animate-in fade-in duration-700 mb-20 relative bg-white overflow-hidden">
-      <div className="absolute top-0 right-0 w-48 h-48 bg-drafting-grid opacity-20 pointer-events-none"></div>
-      <div className="flex justify-between items-center mb-8 relative z-10">
-        <button onClick={()=>setNow(new Date(y, m-1, 1))} className="p-3 bg-[#FAF8F5] border border-black rounded-xl text-[#002447] hover:bg-[#F3EFE6] transition-colors"><ChevronLeft size={18}/></button>
-        <div className="text-center">
-          <span className="tech-stamp">PROJECT SCHEDULE TIMELINE</span>
-          <h4 className=" font-bold text-[#002447] text-xl md:text-2xl mt-0.5">{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(now)}</h4>
-          <span className="text-xs text-[#8C7B63] font-medium font-mono-tech uppercase">MULTI-DAY ARCHITECTURAL TIMELINE</span>
-        </div>
-        <button onClick={()=>setNow(new Date(y, m+1, 1))} className="p-3 bg-[#FAF8F5] border border-black rounded-xl text-[#002447] hover:bg-[#F3EFE6] transition-colors"><ChevronRight size={18}/></button>
-      </div>
-
-      <div className="grid grid-cols-7 gap-px bg-[#E2DDD1] rounded-2xl overflow-hidden border border-black relative z-10">
-        {['อา','จ','อ','พ','พฤ','ศ','ส'].map(d=><div key={d} className="bg-[#FAF8F5] p-3 text-center text-xs text-[#8C7B63] font-mono-tech font-bold uppercase">{d}</div>)}
-        {grid.map((d, i) => {
-          const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-          const tks = tasks.filter(t => {
-            if (t.isDeleted || t.status === 'ยกเลิก') return false;
-            if (t.startDate && t.endDate) {
-              return dateStr >= t.startDate && dateStr <= t.endDate;
-            }
-            return t.aptDate === dateStr;
-          });
-
-          return (
-            <div 
-              key={i} 
-              onClick={() => d && setSelectedDayTasks({ date: dateStr, displayDate: d, tks })} 
-              className={`bg-white min-h-[75px] md:min-h-[120px] p-1 md:p-2 text-left transition-colors ${d ? 'cursor-pointer hover:bg-gray-50/80' : 'bg-gray-50/20'}`}
-            >
-              {d && <div className="text-xs md:text-xs mb-1 font-bold text-gray-700">{d}</div>}
-              <div className="space-y-1">
-                {tks.slice(0, 3).map(t => {
-                  const isMultiDay = t.startDate && t.endDate && t.startDate !== t.endDate;
-                  const isStart = !isMultiDay || dateStr === t.startDate;
-                  const isEnd = !isMultiDay || dateStr === t.endDate;
-                  const sObj = STATUSES.find(s => s.name === t.status);
-                  const isOver = isScheduleOverdue(t) || isOverdue(t);
-                  
-                  return (
-                    <div 
-                      key={t.id} 
-                      onClick={(e) => { e.stopPropagation(); onViewDetail(t); }}
-                      className={`text-[8.5px] text-white py-1 px-1.5 truncate font-bold transition-transform hover:scale-[1.02] ${isStart ? 'rounded-l-lg ml-0.5' : 'rounded-l-none -ml-1 border-l border-white/20'} ${isEnd ? 'rounded-r-lg mr-0.5' : 'rounded-r-none -mr-1'}`}
-                      style={{ backgroundColor: isOver ? '#EF4444' : (sObj?.color || '#003366') }}
-                      title={`${t.taskNo} (${t.project}) - ${t.status} [${t.startDate || t.aptDate} ถึง ${t.endDate || t.aptDate}]`}
-                    >
-                      {isStart ? `${t.taskNo} ${isMultiDay ? '→' : ''}` : (d === 1 ? t.taskNo : '•')}
-                    </div>
-                  );
-                })}
-                {tks.length > 3 && <div className="text-xs text-gray-400 font-bold text-center mt-0.5">+{tks.length - 3} งาน</div>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* PopUp on Day Click */}
-      {selectedDayTasks && (
-        <div className="fixed inset-0 bg-black/60 flex items-end md:items-center justify-center z-[60] p-0 md:p-4 animate-in fade-in duration-200">
-          <div className="bg-white p-6 md:p-8 rounded-none w-full max-w-md shadow-2xl animate-in slide-in-from-bottom-full md:zoom-in-95 duration-300 max-h-[85vh] flex flex-col">
-            <div className="flex justify-between items-center mb-6">
-               <h3 className="font-bold text-xl text-[#003366]">วันที่ {selectedDayTasks.displayDate} {new Intl.DateTimeFormat('th-TH', { month: 'long' }).format(now)}</h3>
-               <button onClick={() => setSelectedDayTasks(null)} className="p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100"><X size={18}/></button>
-            </div>
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto text-left pr-2 custom-scrollbar">
-               {selectedDayTasks.tks.length > 0 ? selectedDayTasks.tks.map(t => (
-                  <div key={t.id} className="p-5 border border-gray-100 rounded-2xl bg-gray-50/50 space-y-2">
-                     <div className="flex items-center justify-between">
-                        <span className="font-bold text-[#003366] text-lg">{t.taskNo}</span>
-                        <StatusTag label={t.status} />
-                     </div>
-                     <div className="text-xs text-gray-500 font-medium">{t.project} — {t.company}</div>
-                     {t.startDate && t.endDate && (
-                       <div className="text-xs text-gray-400 flex items-center gap-1 font-mono"><CalendarDays size={12}/> {t.startDate} ถึง {t.endDate}</div>
-                     )}
-                     <button 
-                       onClick={() => { onViewDetail(t); setSelectedDayTasks(null); }} 
-                       className="w-full mt-2 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-[#003366] hover:bg-gray-50 flex items-center justify-center space-x-1.5 transition-colors"
-                     >
-                       <Eye size={14}/>
-                       <span>ดูรายละเอียด & จัดการเอกสาร</span>
-                     </button>
-                  </div>
-               )) : (<div className="text-center text-gray-400 py-10"><p className="text-sm font-bold">ไม่มีรายการงานในวันนี้</p></div>)}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRestoreTask, triggerPrint }) {
   useEffect(() => {
     const loadScript = (id, src) => {
@@ -3987,18 +3654,17 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
   const [notificationEmail, setNotificationEmail] = useState(settings.notificationEmail || '');
   const [webhookUrl, setWebhookUrl] = useState(settings.webhookUrl || '');
   const [compEmail, setCompEmail] = useState('');
-  const [companyEmails, setCompanyEmails] = useState(settings.companyEmails || {});
+  const [tab, setTab] = useState('lists');
+  const [compSearch, setCompSearch] = useState('');
+  const [emailMsg, setEmailMsg] = useState('');
   const [showGasModal, setShowGasModal] = useState(false);
   const [testEmailStatus, setTestEmailStatus] = useState('');
   const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [copiedGas, setCopiedGas] = useState(false);
-  const [editingComp, setEditingComp] = useState(null);
-  const [editEmailVal, setEditEmailVal] = useState('');
 
   useEffect(() => {
     setNotificationEmail(settings.notificationEmail || '');
     setWebhookUrl(settings.webhookUrl || '');
-    setCompanyEmails(settings.companyEmails || {});
   }, [settings]);
   
   const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
@@ -4131,57 +3797,57 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
     setTimeout(() => setCopiedGas(false), 3000);
   };
 
-  const handleAdd = async (type) => {
-    if (type === 'P') { 
-      if (!p.trim()) return; 
-      await updateSettings({ ...settings, projects: [...settings.projects, p.trim()] }); 
-      setP(''); 
-    } else { 
-      if (!c.trim()) return; 
-      const compName = c.trim();
-      const updatedCompanies = settings.companies.includes(compName) ? settings.companies : [...settings.companies, compName];
-      const updatedCompanyEmails = { ...companyEmails };
-      if (compEmail.trim()) {
-        updatedCompanyEmails[compName] = compEmail.trim();
-      }
-      setCompanyEmails(updatedCompanyEmails);
-      await updateSettings({ 
-        ...settings, 
-        companies: updatedCompanies,
-        companyEmails: updatedCompanyEmails
-      }); 
-      setC(''); 
-      setCompEmail('');
-    }
+  const handleAddProject = async () => {
+    const name = p.trim();
+    if (!name || settings.projects.includes(name)) return;
+    await updateSettings({ ...settings, projects: [...settings.projects, name] });
+    setP('');
   };
 
-  const handleDeleteCompany = async (item) => {
-    const updatedCompanies = settings.companies.filter(x => x !== item);
-    const updatedCompanyEmails = { ...companyEmails };
-    delete updatedCompanyEmails[item];
-    setCompanyEmails(updatedCompanyEmails);
-    await updateSettings({
-      ...settings,
-      companies: updatedCompanies,
-      companyEmails: updatedCompanyEmails
-    });
+  const handleDeleteProject = async (item) => {
+    if (!window.confirm(`ลบโครงการ "${item}" ?\n(ใบงานเดิมที่ใช้ชื่อนี้จะยังอยู่)`)) return;
+    await updateSettings({ ...settings, projects: settings.projects.filter(x => x !== item) });
   };
 
-  const handleSaveCompEmail = async (compName) => {
-    const updated = { ...companyEmails };
-    if (editEmailVal.trim()) {
-      updated[compName] = editEmailVal.trim();
-    } else {
-      delete updated[compName];
-    }
-    setCompanyEmails(updated);
-    setEditingComp(null);
-    setEditEmailVal('');
-    await updateSettings({
-      ...settings,
-      companyEmails: updated
-    });
+  const saveCompanyEmails = (name, list) => {
+    const next = { ...(settings.companyEmails || {}) };
+    if (list.length) next[name] = list; else delete next[name];
+    return updateSettings({ ...settings, companyEmails: next });
   };
+
+  const handleAddCompany = async () => {
+    const name = c.trim();
+    if (!name) return;
+    const { valid, invalid } = parseEmails(compEmail);
+    if (invalid.length) { setEmailMsg(`อีเมลไม่ถูกต้อง: ${invalid.join(', ')}`); return; }
+    setEmailMsg('');
+    const companies = settings.companies.includes(name) ? settings.companies : [...settings.companies, name];
+    const companyEmails = { ...(settings.companyEmails || {}) };
+    if (valid.length) companyEmails[name] = [...new Set([...toEmailList(companyEmails[name]), ...valid])];
+    await updateSettings({ ...settings, companies, companyEmails });
+    setC('');
+    setCompEmail('');
+  };
+
+  const handleDeleteCompany = async (name) => {
+    if (!window.confirm(`ลบร้านค้า "${name}" และอีเมลทั้งหมดของร้านนี้?`)) return;
+    const companyEmails = { ...(settings.companyEmails || {}) };
+    delete companyEmails[name];
+    await updateSettings({ ...settings, companies: settings.companies.filter(x => x !== name), companyEmails });
+  };
+
+  // คืน null เมื่อสำเร็จ หรือข้อความ error เมื่ออีเมลไม่ถูกต้อง
+  const handleAddCompanyEmails = async (name, raw) => {
+    const { valid, invalid } = parseEmails(raw);
+    if (invalid.length) return `อีเมลไม่ถูกต้อง: ${invalid.join(', ')}`;
+    if (!valid.length) return null;
+    await saveCompanyEmails(name, [...new Set([...toEmailList(settings.companyEmails?.[name]), ...valid])]);
+    return null;
+  };
+
+  const handleRemoveCompanyEmail = (name, email) =>
+    saveCompanyEmails(name, toEmailList(settings.companyEmails?.[name]).filter(x => x !== email));
+
 
   const handleImport = (e) => {
     const file = e.target.files[0]; 
@@ -4212,374 +3878,254 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
           const ex = tasks.find(t => t.taskNo === tNo && !t.isDeleted);
           await onSave(tData, !!ex, ex?.id); count++;
         }
-        await updateSettings({ projects: newP, companies: newC }); setSt(`สำเร็จ ${count} รายการ`);
+        await updateSettings({ ...settings, projects: newP, companies: newC }); setSt(`สำเร็จ ${count} รายการ`);
       }
     });
   };
 
+  const SETTINGS_TABS = [
+    { id: 'lists', label: 'โครงการ & ร้านค้า' },
+    { id: 'email', label: 'อีเมลแจ้งเตือน' },
+    { id: 'report', label: 'รายงาน & สำรองข้อมูล' },
+    { id: 'system', label: 'ระบบ & คลังยกเลิก' },
+  ];
+  const filteredCompanies = settings.companies.filter(x => x.toLowerCase().includes(compSearch.trim().toLowerCase()));
+  const sectionTitle = 'text-lg font-black border-b-4 border-black pb-2 mb-4';
+
   return (
-    <div className="space-y-8 mb-24 animate-in fade-in text-left">
-      {/* 1. Storage Usage Indicator (สถานะพื้นที่ Firebase Storage) */}
-      <div className="asym-card p-6 md:p-8 border border-black shadow-sm bg-white relative overflow-hidden">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-[#FAF8F5] border border-black text-[#002447] rounded-xl flex items-center justify-center">
-              <HardDrive size={20} className="text-[#C5A059]"/>
-            </div>
-            <div>
-              <h4 className="text-xs md:text-sm font-bold text-gray-800">พื้นที่จัดเก็บเอกสาร Firebase Storage</h4>
-              <p className="text-xs text-gray-400">แผนบริการฟรี Spark (โควตา 5,120 MB)</p>
-            </div>
-          </div>
-          <span className="text-xs font-bold text-[#002447] bg-[#FAF8F5] border border-black px-3 py-1 rounded-full font-mono-tech">
-            {storageStats.percent}% ใช้งาน
-          </span>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="w-full bg-[#FAF8F5] h-3.5 rounded-full overflow-hidden mb-2 border border-black">
-          <div 
-            className="h-full bg-black transition-all duration-500 rounded-full"
-            style={{ width: `${Math.max(2, storageStats.percent)}%` }}
-          />
-        </div>
-
-        <div className="flex justify-between items-center text-xs text-gray-500 font-medium">
-          <span>ใช้งานไป <strong>{storageStats.totalMb} MB</strong> จาก {storageStats.quotaMb} MB</span>
-          <span>เอกสารในระบบทั้งหมด <strong>{storageStats.fileCount} ไฟล์</strong></span>
-        </div>
-      </div>
-
-      {/* 2. ระบบออกรายงานและสำรองข้อมูล */}
-      <div className="asym-card p-6 md:p-8 border border-black shadow-sm bg-white relative overflow-hidden flex flex-col">
-        <div className="flex items-center space-x-2 mb-4">
-          <span className="tech-stamp">REPORT EXPORT & DATA BACKUP</span>
-        </div>
-        <h4 className="text-sm  font-bold text-[#002447] mb-6 tracking-wide flex items-center">
-          <Printer size={18} className="mr-2 text-[#C5A059]"/> ระบบออกรายงานและสำรองข้อมูล
-        </h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">ประจำเดือน</label>
-            <select value={reportMonth} onChange={e=>setReportMonth(e.target.value)} className="w-full p-3 bg-[#FAF8F5] rounded-xl text-xs md:text-sm border border-black focus:ring-1 focus:ring-[#C5A059]"><option value="">ทุกเดือน</option>{availableMonths.map(m => <option key={m} value={m}>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}</option>)}</select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">โครงการ</label>
-            <select value={reportProj} onChange={e=>setReportProj(e.target.value)} className="w-full p-3 bg-[#FAF8F5] rounded-xl text-xs md:text-sm border border-black focus:ring-1 focus:ring-[#C5A059]"><option value="">ทุกโครงการ</option>{settings.projects.map(p => <option key={p} value={p}>{p}</option>)}</select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">ร้านค้า</label>
-            <select value={reportComp} onChange={e=>setReportComp(e.target.value)} className="w-full p-3 bg-[#FAF8F5] rounded-xl text-xs md:text-sm border border-black focus:ring-1 focus:ring-[#C5A059]"><option value="">ทุกร้านค้า</option>{settings.companies.map(c => <option key={c} value={c}>{c}</option>)}</select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">สถานะ</label>
-            <select value={reportStatus} onChange={e=>setReportStatus(e.target.value)} className="w-full p-3 bg-[#FAF8F5] rounded-xl text-xs md:text-sm border border-black focus:ring-1 focus:ring-[#C5A059]"><option value="">ทุกสถานะ</option>{STATUSES.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}</select>
-          </div>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-4">
-          <button onClick={() => triggerPrint({ selectedMonth: reportMonth, filterProj: reportProj, filterComp: reportComp, filterStatus: reportStatus })} className="flex-1 py-3.5 brut-btn bg-[#FFD93D] text-black min-h-12 font-bold flex items-center justify-center space-x-2 shadow-sm"><Printer size={18}/><span>พิมพ์รายงาน PDF</span></button>
-          <button onClick={handleExportExcel} className="flex-1 py-3.5 brut-btn bg-[#B8F2C9] text-black min-h-12 font-bold flex items-center justify-center space-x-2 shadow-sm"><FileDown size={18}/><span>ดาวน์โหลด Backup Excel</span></button>
-        </div>
-      </div>
-
-      {/* 3. คลังรายการที่ยกเลิก (Cancelled Tasks Archive) */}
-      <div className="asym-card p-6 md:p-8 border border-black shadow-sm bg-white relative overflow-hidden">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center">
-              <History size={20}/>
-            </div>
-            <div>
-              <h4 className="text-xs md:text-sm font-bold text-gray-800">คลังรายการที่ยกเลิก (Cancelled Tasks)</h4>
-              <p className="text-xs text-gray-400">รายการที่ถูกยกเลิกและนำออกจากหน้ากระดานหลัก ({cancelledTasks.length} รายการ)</p>
-            </div>
-          </div>
-          <button 
-            onClick={() => setShowCancelledArchive(!showCancelledArchive)}
-            className="text-xs font-bold text-[#003366] hover:underline"
+    <div className="space-y-6 mb-24 animate-in fade-in text-left">
+      <div className="flex flex-wrap">
+        {SETTINGS_TABS.map((t, i) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`min-h-12 px-4 text-sm font-extrabold border-2 border-black ${i > 0 ? '-ml-0.5' : ''} ${tab === t.id ? 'bg-black text-white' : 'bg-white hover:bg-[#FFD93D]'}`}
           >
-            {showCancelledArchive ? 'ซ่อนรายการ' : 'แสดงรายการ'}
+            {t.label}
           </button>
-        </div>
+        ))}
+      </div>
 
-        {showCancelledArchive && (
-          <div className="mt-6 border-t border-gray-100 pt-4">
-            {cancelledTasks.length > 0 ? (
-              <div className="space-y-3 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
-                {cancelledTasks.map(t => {
-                  const dateStr = t.cancelledAt ? new Intl.DateTimeFormat('th-TH', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(t.cancelledAt)) : '-';
-                  return (
-                    <div key={t.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <span className="font-bold text-gray-800 text-sm">#{t.taskNo}</span>
-                          <span className="text-xs text-red-600 bg-red-50 px-2 py-0.5 rounded font-bold">ยกเลิกแล้ว</span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-0.5">{t.project} — {t.company}</p>
-                        <p className="text-xs text-red-600 font-medium mt-1"><strong>สาเหตุ:</strong> {t.cancelReason || 'ไม่ระบุ'}</p>
-                        <span className="text-xs text-gray-400 font-mono mt-0.5 block">ยกเลิกเมื่อ: {dateStr}</span>
-                      </div>
-                      <button 
-                        onClick={() => onRestoreTask(t)}
-                        className="px-4 py-2 bg-white hover:bg-gray-100 border border-gray-200 rounded-xl text-xs font-bold text-[#003366] shrink-0 flex items-center space-x-1"
-                      >
-                        <RotateCcw size={13}/>
-                        <span>กู้คืนใบงาน</span>
-                      </button>
-                    </div>
-                  );
-                })}
+      {tab === 'lists' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <div className="brut p-5">
+            <h4 className={sectionTitle}>โครงการ <span className="num">({settings.projects.length})</span></h4>
+            <form onSubmit={e => { e.preventDefault(); handleAddProject(); }} className="flex gap-2 mb-4">
+              <input className="field flex-1" placeholder="ชื่อโครงการใหม่" value={p} onChange={e => setP(e.target.value)} />
+              <button type="submit" className="brut-btn min-h-12 px-5 bg-[#FFD93D] font-extrabold text-sm shrink-0">เพิ่ม</button>
+            </form>
+            <ul className="space-y-2 max-h-96 overflow-auto custom-scrollbar pr-1">
+              {settings.projects.map(item => (
+                <li key={item} className="border-2 border-black bg-white flex items-center justify-between pl-3">
+                  <span className="text-sm font-bold py-2">{item}</span>
+                  <button onClick={() => handleDeleteProject(item)} className="min-h-12 min-w-12 flex items-center justify-center border-l-2 border-black hover:bg-[#FF5C5C]" title="ลบโครงการนี้" aria-label={`ลบ ${item}`}>
+                    <X size={16} />
+                  </button>
+                </li>
+              ))}
+              {settings.projects.length === 0 && <li className="text-sm font-medium opacity-70">ยังไม่มีโครงการ</li>}
+            </ul>
+          </div>
+
+          <div className="brut p-5">
+            <h4 className={sectionTitle}>ร้านค้า / ผู้รับเหมา <span className="num">({settings.companies.length})</span></h4>
+            <form onSubmit={e => { e.preventDefault(); handleAddCompany(); }} className="space-y-2 mb-4 border-2 border-black bg-[#FFFBEB] p-3">
+              <input className="field" placeholder="ชื่อบริษัท / ร้านค้า" value={c} onChange={e => setC(e.target.value)} />
+              <div className="flex gap-2">
+                <input className="field flex-1" placeholder="อีเมล (ใส่ได้หลายอีเมล คั่นด้วย , หรือเว้นวรรค)" value={compEmail} onChange={e => setCompEmail(e.target.value)} />
+                <button type="submit" className="brut-btn min-h-12 px-5 bg-[#FFD93D] font-extrabold text-sm shrink-0">เพิ่ม</button>
               </div>
-            ) : (
-              <p className="text-xs text-gray-400 text-center py-4">ไม่มีรายการที่ถูกยกเลิก</p>
+              {emailMsg && <p className="text-xs font-bold text-[#B91C1C]">{emailMsg}</p>}
+            </form>
+            {settings.companies.length > 6 && (
+              <div className="relative mb-3">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+                <input className="field pl-9" placeholder="ค้นหาร้านค้า..." value={compSearch} onChange={e => setCompSearch(e.target.value)} />
+              </div>
+            )}
+            <div className="space-y-3 max-h-[32rem] overflow-auto custom-scrollbar pr-1">
+              {filteredCompanies.map(name => (
+                <CompanyRow
+                  key={name}
+                  name={name}
+                  emails={toEmailList(settings.companyEmails?.[name])}
+                  onAddEmails={(raw) => handleAddCompanyEmails(name, raw)}
+                  onRemoveEmail={(em) => handleRemoveCompanyEmail(name, em)}
+                  onDelete={() => handleDeleteCompany(name)}
+                />
+              ))}
+              {filteredCompanies.length === 0 && <p className="text-sm font-medium opacity-70">{settings.companies.length ? 'ไม่พบร้านค้าที่ค้นหา' : 'ยังไม่มีร้านค้า'}</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'email' && (
+        <div className="brut p-5 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-4 border-black pb-3">
+            <div>
+              <h4 className="text-lg font-black flex items-center gap-2"><Mail size={20}/> แจ้งเตือนทางอีเมลอัตโนมัติ</h4>
+              <p className="text-sm font-medium">แจ้งเจ้าหน้าที่เมื่อมีใบเสนอราคา และแจ้งผู้รับเหมาเมื่อเปิดใบงาน (ส่งผ่าน Google Apps Script ฟรี)</p>
+            </div>
+            <button type="button" onClick={() => setShowGasModal(true)} className="brut-btn min-h-12 px-4 bg-white font-extrabold text-sm self-start sm:self-center">วิธีตั้งค่า Webhook</button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="space-y-1.5">
+              <label className="text-sm font-extrabold">อีเมลเจ้าหน้าที่ (รับแจ้งเตือน)</label>
+              <input type="text" placeholder="admin@lh.co.th, officer@lh.co.th" value={notificationEmail} onChange={e => setNotificationEmail(e.target.value)} className="field" />
+              <p className="text-xs font-medium">ใส่ได้หลายอีเมล คั่นด้วยเครื่องหมายจุลภาค (,) ส่งทันทีเมื่อผู้รับเหมาแนบใบเสนอราคา</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-extrabold">Google Apps Script Webhook URL</label>
+              <input type="url" placeholder="https://script.google.com/macros/s/.../exec" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} className="field num" />
+              <p className="text-xs font-medium">ต้องเป็นลิงก์ Web app ที่ลงท้ายด้วย /exec (ส่งฟรี ~100 ฉบับ/วัน)</p>
+            </div>
+          </div>
+
+          {testEmailStatus && (
+            <div className={`border-2 border-black p-3 text-sm font-bold flex items-center gap-2 ${testEmailStatus.includes('สำเร็จ') ? 'bg-[#B8F2C9]' : testEmailStatus.includes('กำลัง') ? 'bg-[#BDE3FF]' : 'bg-[#FF5C5C]'}`}>
+              {isTestingEmail && <Loader2 size={14} className="animate-spin" />}
+              <span>{testEmailStatus}</span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={handleSaveEmailSettings} className="brut-btn min-h-12 px-6 bg-[#FFD93D] font-extrabold text-sm flex items-center gap-2">
+              <CheckCircle2 size={16}/><span>บันทึกการตั้งค่า</span>
+            </button>
+            <button type="button" disabled={isTestingEmail} onClick={handleTestEmail} className="brut-btn min-h-12 px-5 bg-white font-extrabold text-sm flex items-center gap-2 disabled:opacity-50">
+              {isTestingEmail ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
+              <span>{isTestingEmail ? 'กำลังส่งทดสอบ...' : 'ทดสอบส่งอีเมล'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {tab === 'report' && (
+        <div className="brut p-5">
+          <h4 className={sectionTitle}><Printer size={18} className="inline mr-2 -mt-1"/>ออกรายงานและสำรองข้อมูล</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+            <label className="space-y-1 block">
+              <span className="text-sm font-extrabold">ประจำเดือน</span>
+              <select value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="field"><option value="">ทุกเดือน</option>{availableMonths.map(m => <option key={m} value={m}>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}</option>)}</select>
+            </label>
+            <label className="space-y-1 block">
+              <span className="text-sm font-extrabold">โครงการ</span>
+              <select value={reportProj} onChange={e => setReportProj(e.target.value)} className="field"><option value="">ทุกโครงการ</option>{settings.projects.map(x => <option key={x} value={x}>{x}</option>)}</select>
+            </label>
+            <label className="space-y-1 block">
+              <span className="text-sm font-extrabold">ร้านค้า</span>
+              <select value={reportComp} onChange={e => setReportComp(e.target.value)} className="field"><option value="">ทุกร้านค้า</option>{settings.companies.map(x => <option key={x} value={x}>{x}</option>)}</select>
+            </label>
+            <label className="space-y-1 block">
+              <span className="text-sm font-extrabold">สถานะ</span>
+              <select value={reportStatus} onChange={e => setReportStatus(e.target.value)} className="field"><option value="">ทุกสถานะ</option>{STATUSES.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}</select>
+            </label>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button onClick={() => triggerPrint({ selectedMonth: reportMonth, filterProj: reportProj, filterComp: reportComp, filterStatus: reportStatus })} className="brut-btn flex-1 min-h-12 bg-[#FFD93D] font-extrabold flex items-center justify-center gap-2"><Printer size={18}/><span>พิมพ์รายงาน PDF</span></button>
+            <button onClick={handleExportExcel} className="brut-btn flex-1 min-h-12 bg-[#B8F2C9] font-extrabold flex items-center justify-center gap-2"><FileDown size={18}/><span>ดาวน์โหลด Backup Excel</span></button>
+          </div>
+        </div>
+      )}
+
+      {tab === 'system' && (
+        <div className="space-y-6">
+          <div className="brut p-5">
+            <h4 className={sectionTitle}><HardDrive size={18} className="inline mr-2 -mt-1"/>พื้นที่จัดเก็บเอกสาร</h4>
+            <div className="flex justify-between items-center text-sm font-bold mb-2">
+              <span>ใช้ไป <span className="num">{storageStats.totalMb}</span> MB จาก <span className="num">{storageStats.quotaMb}</span> MB (แผน Spark ฟรี)</span>
+              <span className="num">{storageStats.percent}%</span>
+            </div>
+            <div className="w-full h-5 border-2 border-black bg-white">
+              <div className="h-full bg-black" style={{ width: `${Math.max(2, storageStats.percent)}%` }} />
+            </div>
+            <p className="text-sm font-medium mt-2">เอกสารในระบบ <span className="num font-bold">{storageStats.fileCount}</span> ไฟล์</p>
+          </div>
+
+          <div className="brut p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-lg font-black"><History size={18} className="inline mr-2 -mt-1"/>คลังรายการที่ยกเลิก <span className="num">({cancelledTasks.length})</span></h4>
+              <button onClick={() => setShowCancelledArchive(!showCancelledArchive)} className="brut-btn min-h-12 px-4 bg-white text-sm font-extrabold">{showCancelledArchive ? 'ซ่อนรายการ' : 'แสดงรายการ'}</button>
+            </div>
+            {showCancelledArchive && (
+              <div className="mt-4 border-t-4 border-black pt-4">
+                {cancelledTasks.length > 0 ? (
+                  <div className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+                    {cancelledTasks.map(t => {
+                      const dateStr = t.cancelledAt ? new Intl.DateTimeFormat('th-TH', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(t.cancelledAt)) : '-';
+                      return (
+                        <div key={t.id} className="border-2 border-black bg-[#FFE5E0] p-3 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                          <div className="min-w-0">
+                            <p className="num font-black">#{t.taskNo}</p>
+                            <p className="text-sm font-medium">{t.project} — {t.company}</p>
+                            <p className="text-sm font-bold">สาเหตุ: {t.cancelReason || 'ไม่ระบุ'}</p>
+                            <p className="num text-xs font-medium">ยกเลิกเมื่อ {dateStr}</p>
+                          </div>
+                          <button onClick={() => onRestoreTask(t)} className="brut-btn min-h-12 px-4 bg-white text-sm font-extrabold shrink-0 flex items-center gap-1.5"><RotateCcw size={14}/><span>กู้คืน</span></button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm font-medium">ไม่มีรายการที่ถูกยกเลิก</p>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
 
-      {/* 4. ระบบการแจ้งเตือนทางอีเมลอัตโนมัติ (Email Notifications) */}
-      <div className="bg-white p-6 md:p-8 rounded-none border border-gray-100 shadow-sm space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-50 text-[#003366] rounded-xl flex items-center justify-center">
-              <Mail size={20}/>
-            </div>
-            <div>
-              <h4 className="text-xs md:text-sm font-bold text-gray-800">ระบบการแจ้งเตือนทางอีเมลอัตโนมัติ (Email Notifications)</h4>
-              <p className="text-xs text-gray-400">ส่งอีเมลแจ้งเตือนเจ้าหน้าที่เมื่อมีใบเสนอราคา และแจ้งเตือนผู้รับเหมาเมื่อมีใบแจ้งซ่อม (ฟรี 100% ผ่าน Google Apps Script)</p>
-            </div>
-          </div>
-          <button 
-            type="button"
-            onClick={() => setShowGasModal(true)}
-            className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-[#003366] border border-blue-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 self-start sm:self-center"
-          >
-            <span>📜 ดูโค้ด Webhook & วิธีตั้งค่าฟรี</span>
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
-              <Mail size={12}/> อีเมลสำหรับรับแจ้งเตือน (เจ้าหน้าที่)
-            </label>
-            <input 
-              type="email" 
-              placeholder="e.g. admin@vtrack.com, officer@company.com" 
-              value={notificationEmail} 
-              onChange={e => setNotificationEmail(e.target.value)}
-              className="w-full p-3.5 bg-gray-50 rounded-2xl text-xs border border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#003366] outline-none font-medium text-gray-800"
-            />
-            <p className="text-xs text-gray-400">
-              * เมื่อผู้รับเหมาแนบใบเสนอราคาในรายการสถานะ <strong>'รอใบเสนอราคา'</strong> ระบบจะส่งอีเมลแจ้งเตือนมาที่นี่ทันที
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
-              <span>🔗</span> Google Apps Script Webhook URL (ฟรี 100%)
-            </label>
-            <input 
-              type="url" 
-              placeholder="https://script.google.com/macros/s/.../exec" 
-              value={webhookUrl} 
-              onChange={e => setWebhookUrl(e.target.value)}
-              className="w-full p-3.5 bg-gray-50 rounded-2xl text-xs border border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#003366] outline-none font-mono text-gray-700"
-            />
-            <p className="text-xs text-gray-400">
-              * URL เว็บบริการจาก Google Apps Script (ส่งอีเมลฟรี 100 ฉบับ/วัน ไม่ต้องใช้บัตรเครดิต)
-            </p>
+          <div className="border-4 border-black bg-[#FF5C5C] p-5 shadow-[6px_6px_0_0_#111]">
+            <h4 className="text-lg font-black mb-1">พื้นที่อันตราย</h4>
+            <p className="text-sm font-bold mb-3">ลบใบงานทั้งหมดในฐานข้อมูล กู้คืนไม่ได้ (สำรอง Excel ก่อนเสมอ)</p>
+            <button onClick={() => setShowClearConfirm(true)} className="brut-btn min-h-12 px-8 bg-white font-extrabold flex items-center gap-2"><Trash size={18}/> ล้างฐานข้อมูล</button>
           </div>
         </div>
+      )}
 
-        {testEmailStatus && (
-          <div className={`p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${testEmailStatus.includes('สำเร็จ') ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : testEmailStatus.includes('กำลัง') ? 'bg-blue-50 text-blue-800' : 'bg-red-50 text-red-800'}`}>
-            {isTestingEmail && <Loader2 size={14} className="animate-spin" />}
-            <span>{testEmailStatus}</span>
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-3 pt-2">
-          <button 
-            type="button"
-            onClick={handleSaveEmailSettings}
-            className="px-6 py-3 bg-[#003366] hover:bg-[#002244] text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs active:scale-95"
-          >
-            <CheckCircle2 size={15}/>
-            <span>บันทึกการตั้งค่าอีเมล</span>
-          </button>
-
-          <button 
-            type="button"
-            disabled={isTestingEmail}
-            onClick={handleTestEmail}
-            className="px-5 py-3 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 rounded-xl text-xs font-bold transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
-          >
-            {isTestingEmail ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
-            <span>{isTestingEmail ? 'กำลังส่งทดสอบ...' : 'ทดสอบส่งอีเมล (Test)'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 5. การจัดการโครงการ & ร้านค้า/ผู้รับเหมา */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 md:p-8 rounded-none border border-gray-100 shadow-sm flex flex-col">
-          <h4 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">โครงการ</h4>
-          <div className="flex space-x-2 mb-4">
-            <input 
-              className="flex-1 p-3 bg-gray-50 rounded-2xl text-xs border border-gray-200 focus:bg-white outline-none" 
-              placeholder="ชื่อโครงการใหม่"
-              value={p} 
-              onChange={e=>setP(e.target.value)}
-            />
-            <button onClick={()=>handleAdd('P')} className="bg-[#003366] text-white px-5 rounded-2xl text-xs font-bold">เพิ่ม</button>
-          </div>
-          <div className="space-y-1.5 max-h-60 overflow-auto pr-1 custom-scrollbar">
-            {settings.projects.map(item => (
-              <div key={item} className="p-3 bg-gray-50 rounded-xl flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-700">{item}</span>
-                <button onClick={()=>updateSettings({...settings, projects: settings.projects.filter(x=>x!==item)})} className="text-red-300 hover:text-red-500">
-                  <X size={14}/>
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white p-6 md:p-8 rounded-none border border-gray-100 shadow-sm flex flex-col">
-          <div className="flex justify-between items-center mb-4">
-            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">ร้านค้า / ผู้รับเหมา</h4>
-            <span className="text-xs text-gray-400 font-medium">ผูกอีเมลสำหรับส่งใบแจ้งซ่อม</span>
-          </div>
-          
-          <div className="space-y-2 mb-4 bg-gray-50/70 p-3 rounded-2xl border border-gray-100">
-            <input 
-              className="w-full p-2.5 bg-white rounded-xl text-xs border border-gray-200 focus:ring-1 focus:ring-[#003366] outline-none" 
-              placeholder="ชื่อบริษัท / ร้านค้า" 
-              value={c} 
-              onChange={e=>setC(e.target.value)}
-            />
-            <div className="flex space-x-2">
-              <input 
-                type="email"
-                className="flex-1 p-2.5 bg-white rounded-xl text-xs border border-gray-200 focus:ring-1 focus:ring-[#003366] outline-none" 
-                placeholder="อีเมลผู้รับเหมา (ถ้ามี)" 
-                value={compEmail} 
-                onChange={e=>setCompEmail(e.target.value)}
-              />
-              <button onClick={()=>handleAdd('C')} className="bg-[#003366] text-white px-5 rounded-xl text-xs font-bold shrink-0">
-                เพิ่ม
-              </button>
+      {showClearConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-6">
+          <div className="brut-panel bg-white p-8 w-full max-w-sm text-center">
+            <h3 className="font-black text-2xl mb-2">ยืนยันลบข้อมูลทั้งหมด?</h3>
+            <p className="text-sm font-bold">การลบนี้ไม่สามารถกู้คืนได้</p>
+            <div className="flex gap-4 mt-6">
+              <button onClick={() => setShowClearConfirm(false)} className="brut-btn flex-1 min-h-12 bg-white font-extrabold">ยกเลิก</button>
+              <button onClick={async () => { await onClear(); setShowClearConfirm(false); }} className="brut-btn flex-1 min-h-12 bg-[#FF5C5C] font-extrabold">ลบทั้งหมด</button>
             </div>
           </div>
-
-          <div className="space-y-2 max-h-60 overflow-auto pr-1 custom-scrollbar">
-            {settings.companies.map(item => {
-              const email = companyEmails[item];
-              const isEditing = editingComp === item;
-              return (
-                <div key={item} className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex flex-col gap-1.5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-gray-800">{item}</span>
-                    <button onClick={()=>handleDeleteCompany(item)} className="text-red-300 hover:text-red-500" title="ลบร้านค้านี้">
-                      <X size={14}/>
-                    </button>
-                  </div>
-                  
-                  {isEditing ? (
-                    <div className="flex gap-1.5 mt-1">
-                      <input 
-                        type="email"
-                        value={editEmailVal}
-                        onChange={e => setEditEmailVal(e.target.value)}
-                        placeholder="อีเมลผู้รับเหมา"
-                        className="flex-1 p-1.5 text-xs bg-white rounded-lg border border-gray-300"
-                        autoFocus
-                      />
-                      <button 
-                        onClick={() => handleSaveCompEmail(item)}
-                        className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold"
-                      >
-                        บันทึก
-                      </button>
-                      <button 
-                        onClick={() => { setEditingComp(null); setEditEmailVal(''); }}
-                        className="px-2 py-1 bg-gray-200 text-gray-600 rounded-lg text-xs"
-                      >
-                        ยกเลิก
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between text-xs">
-                      {email ? (
-                        <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-none font-mono flex items-center gap-1 border border-blue-100">
-                          <Mail size={10}/> {email}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">ยังไม่ระบุอีเมล</span>
-                      )}
-                      <button 
-                        onClick={() => { setEditingComp(item); setEditEmailVal(email || ''); }}
-                        className="text-xs text-gray-500 hover:text-[#003366] font-medium underline ml-auto"
-                      >
-                        {email ? 'แก้ไขอีเมล' : '+ เพิ่มอีเมล'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
         </div>
-      </div>
-
-      {/* 6. พื้นที่อันตราย */}
-      <div className="bg-red-50 p-10 rounded-none border border-red-100 shadow-sm text-center">
-        <h4 className="text-xs font-bold text-red-400 mb-4 uppercase tracking-widest">พื้นที่อันตราย</h4>
-        <button onClick={() => setShowClearConfirm(true)} className="bg-red-500 text-white px-12 py-4 rounded-2xl font-bold flex items-center mx-auto"><Trash size={18} className="mr-2"/> ล้างฐานข้อมูล</button>
-        {showClearConfirm && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-6">
-            <div className="bg-white p-10 rounded-none w-full max-w-sm text-center">
-              <h3 className="font-bold text-gray-800 text-2xl mb-2">ยืนยันลบข้อมูลทั้งหมด?</h3>
-              <div className="flex gap-4 mt-8">
-                <button onClick={() => setShowClearConfirm(false)} className="flex-1 py-4 bg-gray-100 rounded-2xl font-bold">ยกเลิก</button>
-                <button onClick={async () => { await onClear(); setShowClearConfirm(false); }} className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-bold">ลบทั้งหมด</button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Modal: Google Apps Script Code & Setup Instructions */}
       {showGasModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-in fade-in">
-          <div className="bg-white p-6 md:p-8 rounded-none w-full max-w-2xl max-h-[90vh] overflow-y-auto text-left space-y-5 custom-scrollbar shadow-2xl">
-            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+          <div className="bg-white p-6 md:p-8 rounded-none w-full max-w-2xl max-h-[90vh] overflow-y-auto text-left space-y-5 custom-scrollbar brut-panel">
+            <div className="flex justify-between items-center border-b border-black pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#003366] flex items-center justify-center font-bold text-xs">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-black flex items-center justify-center font-bold text-xs">
                   GAS
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-800 text-base">วิธีติดตั้ง Google Apps Script (ระบบ Task Flow ทะลุการบล็อคเมลองค์กร)</h3>
-                  <p className="text-xs text-gray-400">ส่งอีเมลฟรี 100% ผ่านเกณฑ์ตรวจจับสแปมของเมลองค์กร (เช่น Microsoft 365, Exchange, Google Workspace)</p>
+                  <p className="text-xs text-gray-600">ส่งอีเมลฟรี 100% ผ่านเกณฑ์ตรวจจับสแปมของเมลองค์กร (เช่น Microsoft 365, Exchange, Google Workspace)</p>
                 </div>
               </div>
-              <button onClick={() => setShowGasModal(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400"><X size={18}/></button>
+              <button onClick={() => setShowGasModal(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-600"><X size={18}/></button>
             </div>
 
             <div className="space-y-3 text-xs text-gray-600 leading-relaxed">
               <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 space-y-1">
-                <p className="font-bold text-[#003366]">ขั้นตอนที่ 1:</p>
+                <p className="font-bold text-black">ขั้นตอนที่ 1:</p>
                 <p>เปิดเบราว์เซอร์ไปที่ <a href="https://script.google.com" target="_blank" rel="noreferrer" className="text-blue-600 underline font-bold">script.google.com</a> (ล็อกอินด้วยบัญชี Google ของท่าน) แล้วกดปุ่ม <strong>"+ โครงการใหม่ (New project)"</strong></p>
               </div>
 
               <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 space-y-1">
-                <p className="font-bold text-[#003366]">ขั้นตอนที่ 2:</p>
+                <p className="font-bold text-black">ขั้นตอนที่ 2:</p>
                 <p>ลบโค้ดเดิมในหน้าจอออกทั้งหมด แล้วกดปุ่ม <strong>"คัดลอกโค้ด Google Apps Script"</strong> ด้านล่างนี้ นำไปวางแทนที่</p>
               </div>
 
               <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 space-y-1">
-                <p className="font-bold text-[#003366]">ขั้นตอนที่ 3:</p>
+                <p className="font-bold text-black">ขั้นตอนที่ 3:</p>
                 <p>กดปุ่ม <strong>"การทำให้ใช้งานได้ (Deploy)"</strong> ด้านบนขวา ➔ เลือก <strong>"การทำให้ใช้งานได้รายการใหม่ (New deployment)"</strong> ➔ เลือกประเภทเป็น <strong>"เว็บแอป (Web app)"</strong>:</p>
                 <ul className="list-disc list-inside pl-2 space-y-0.5 text-gray-700">
                   <li>เรียกใช้ในฐานะ (Execute as): <strong>ฉัน (Me)</strong></li>
@@ -4588,7 +4134,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
               </div>
 
               <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 space-y-1">
-                <p className="font-bold text-[#003366]">ขั้นตอนที่ 4:</p>
+                <p className="font-bold text-black">ขั้นตอนที่ 4:</p>
                 <p>กด <strong>"ทำให้ใช้งานได้"</strong> และอนุญาตสิทธิ์เข้าถึง (Authorize) จากนั้นคัดลอก <strong>URL เว็บแอป (Web app URL)</strong> ที่ได้ นำมาวางลงในช่อง Webhook URL ในหน้าตั้งค่าของ V-Track เป็นอันเสร็จสมบูรณ์!</p>
               </div>
             </div>
@@ -4598,7 +4144,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
                 <span className="text-xs font-bold text-gray-700 font-mono">CODE: Code.gs</span>
                 <button 
                   onClick={handleCopyGasCode}
-                  className="px-3.5 py-1.5 bg-[#003366] hover:bg-[#002244] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95"
+                  className="px-3.5 py-1.5 bg-black hover:bg-[#333] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95"
                 >
                   {copiedGas ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
                   <span>{copiedGas ? 'คัดลอกโค้ดแล้ว!' : 'คัดลอกโค้ดทั้งหมด'}</span>

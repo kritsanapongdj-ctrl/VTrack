@@ -4,20 +4,38 @@
 
 @layer base {
   body {
-    font-family: 'Noto Sans Thai', 'Plus Jakarta Sans', 'Sarabun', -apple-system, BlinkMacSystemFont, sans-serif;
-    background-color: #F8F6F0;
-    color: #1E252B;
+    font-family: 'Noto Sans Thai', system-ui, sans-serif;
+    background-color: #FFFBEB;
+    color: #111;
     overflow-x: hidden;
+    font-variant-numeric: tabular-nums;
   }
 
   h1, h2, h3, .font-serif-luxury {
-    font-family: 'Cormorant Garamond', 'Cinzel', serif;
+    font-family: 'Noto Sans Thai', system-ui, sans-serif;
+    font-weight: 800;
   }
 
-  .font-mono-tech {
-    font-family: 'Space Mono', monospace;
+  .font-mono-tech, .num {
+    font-family: 'Space Grotesk', 'Noto Sans Thai', sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
   }
+
+  ::selection { background: #FFD93D; color: #111; }
+  :focus-visible { outline: 3px solid #111; outline-offset: 2px; }
 }
+
+/* --- Neo-brutalist primitives --- */
+.brut { background: #fff; border: 2px solid #111; box-shadow: 4px 4px 0 0 #111; }
+.brut-panel { border: 3px solid #111; box-shadow: 8px 8px 0 0 #111; }
+.brut-btn {
+  border: 2px solid #111;
+  box-shadow: 3px 3px 0 0 #111;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.brut-btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 0 #111; }
+.brut-btn:active { transform: translate(3px, 3px); box-shadow: 0 0 0 0 #111; }
 
 /* --- Architectural Contemporary & 90s Heritage Fusion (LH Signature) --- */
 
@@ -40,34 +58,25 @@
 }
 .drafting-crosshair::before {
   content: "⌖";
-  font-family: 'Space Mono', monospace;
+  font-family: 'Space Grotesk', sans-serif;
   font-size: 10px;
   color: #B08731;
   opacity: 0.6;
 }
 
 /* Tactile 90s Architectural Card with Contemporary Luxury finish */
-.asym-card {
-  border-radius: 20px 4px 20px 4px;
+.asym-card, .asym-card-inverse {
+  border-radius: 0;
   background: #FFFFFF;
-  border: 1px solid rgba(226, 221, 209, 0.95);
-  box-shadow: 0 4px 20px -2px rgba(0, 36, 71, 0.04), 0 2px 6px -1px rgba(176, 135, 49, 0.05);
+  border: 2px solid #111;
+  box-shadow: 4px 4px 0 0 #111;
   position: relative;
-  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.1s, box-shadow 0.1s;
 }
 
 .asym-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px -4px rgba(0, 36, 71, 0.08), 0 4px 12px -1px rgba(176, 135, 49, 0.12);
-  border-color: rgba(176, 135, 49, 0.5);
-}
-
-.asym-card-inverse {
-  border-radius: 4px 20px 4px 20px;
-  background: #FFFFFF;
-  border: 1px solid rgba(226, 221, 209, 0.95);
-  box-shadow: 0 4px 20px -2px rgba(0, 36, 71, 0.04);
-  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 0 #111;
 }
 
 /* Dynamic Flowing Wave Ribbon Line */
@@ -100,7 +109,7 @@
 
 /* 80s Postmodern Stamp & Registration Mark */
 .tech-stamp {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Space Grotesk', sans-serif;
   font-size: 9px;
   letter-spacing: 0.14em;
   text-transform: uppercase;

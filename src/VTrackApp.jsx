@@ -2956,12 +2956,15 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
     return baseFilteredTasks.filter(t => t.status === 'จบงานและรอรับเอกสารวางบิล' || t.status === 'ได้รับเอกสารวางบิลแล้ว').length;
   }, [baseFilteredTasks]);
 
-  const totalMonthBudget = useMemo(() => {
-    return baseFilteredTasks.reduce((acc, t) => {
-      if (!t.cost) return acc;
-      const num = parseFloat(String(t.cost).replace(/,/g, ''));
-      return isNaN(num) ? acc : acc + num;
-    }, 0);
+  const { totalMonthBudget, disbursedBudget } = useMemo(() => {
+    let total = 0, disbursed = 0;
+    for (const t of baseFilteredTasks) {
+      const num = parseFloat(String(t.cost || '').replace(/,/g, ''));
+      if (isNaN(num)) continue;
+      total += num;
+      if (t.status === 'ส่งเอกสารเบิกจ่ายแล้ว') disbursed += num;
+    }
+    return { totalMonthBudget: total, disbursedBudget: disbursed };
   }, [baseFilteredTasks]);
 
   // Status statistics for Donut chart and spec matrix
@@ -3036,9 +3039,9 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
             <div className="mt-2 pt-2 border-t-2 border-black text-sm font-bold">รอเจ้าหน้าที่อนุมัติ</div>
           </div>
           <div className="brut bg-[#BDE3FF] p-4">
-            <div className="text-sm font-extrabold flex items-center justify-between">มูลค่าเบิกจ่ายในงวด <DollarSign size={18}/></div>
-            <div className="num text-xl font-black mt-1 whitespace-nowrap">฿ {totalMonthBudget.toLocaleString()}</div>
-            <div className="mt-2 pt-2 border-t-2 border-black text-sm font-bold flex justify-between"><span>ส่งเบิกจ่ายแล้ว</span><span className="num">{disbursedCount} งาน</span></div>
+            <div className="text-sm font-extrabold flex items-center justify-between">เบิกจ่ายแล้ว / มูลค่างานในงวด <DollarSign size={18}/></div>
+            <div className="num text-xl font-black mt-1 whitespace-nowrap">฿ {disbursedBudget.toLocaleString()} <span className="text-sm font-bold">/ {totalMonthBudget.toLocaleString()}</span></div>
+            <div className="mt-2 pt-2 border-t-2 border-black text-sm font-bold flex justify-between"><span>ส่งเบิกจ่ายแล้ว</span><span className="num">{disbursedCount} / {baseFilteredTasks.length} งาน</span></div>
           </div>
         </div>
       </div>

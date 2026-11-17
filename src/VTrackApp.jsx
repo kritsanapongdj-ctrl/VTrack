@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, getDoc, setDoc, onSnapshot, addDoc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, setDoc, onSnapshot, addDoc, updateDoc, deleteDoc, getDocs, runTransaction, deleteField } from 'firebase/firestore';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { stampSignatureOnPdfAdvanced, generateStampBadgePng } from './utils/pdfStamper';
 
@@ -556,6 +556,57 @@ const parseEmails = (raw) => {
   return { valid: parts.filter(x => EMAIL_RE.test(x)), invalid: parts.filter(x => !EMAIL_RE.test(x)) };
 };
 
+// --- แจ้งเตือนวางบิลเกินกำหนด ---
+// จบงานวันที่ 1-9 → วางบิลภายในวันที่ 20 ของเดือนนั้น; วันที่ 10 เป็นต้นไป → ภายในวันที่ 15 ของเดือนถัดไป
+const BILL_WAIT_STATUS = 'จบงานและรอรับเอกสารวางบิล';
+const getBillingDeadline = (task) => {
+  const ts = task.statusUpdatedAt || task.updatedAt || task.createdAt;
+  if (!ts) return null;
+  const d = new Date(ts);
+  return d.getDate() < 10 ? new Date(d.getFullYear(), d.getMonth(), 20) : new Date(d.getFullYear(), d.getMonth() + 1, 15);
+};
+const getBillingOverdue = (tasks) => {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return tasks.flatMap(task => {
+    const deadline = task.isDeleted || task.status !== BILL_WAIT_STATUS ? null : getBillingDeadline(task);
+    return deadline && today > deadline ? [{ task, deadline }] : [];
+  });
+};
+const fmtThaiDate = (d) => new Date(d).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+const escHtml = (s) => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+// ส่งอีเมลเตือนวางบิล (1 ฉบับ/บริษัท, ครั้งเดียวต่อใบงาน) คืนจำนวนใบงานที่ส่ง
+// บันทึก billingReminders ใน settings ด้วย transaction ก่อนส่ง เพื่อกันหลายเครื่องส่งซ้ำ
+const sendBillingReminders = async (tasks, settings) => {
+  const candidates = getBillingOverdue(tasks).filter(({ task }) => toEmailList(settings.companyEmails?.[task.company]).length);
+  if (!candidates.length) return 0;
+  const ref = doc(db, 'artifacts', appId, 'public', 'data', 'vtrack_settings', 'general');
+  const claimed = await runTransaction(db, async (tx) => {
+    const sent = (await tx.get(ref)).data()?.billingReminders || {};
+    const fresh = candidates.filter(({ task }) => !sent[task.id]);
+    if (fresh.length) tx.update(ref, Object.fromEntries(fresh.map(({ task }) => [`billingReminders.${task.id}`, Date.now()])));
+    return fresh;
+  });
+
+  const byCompany = {};
+  claimed.forEach(c => (byCompany[c.task.company] ||= []).push(c));
+  let count = 0;
+  for (const [company, items] of Object.entries(byCompany)) {
+    const lines = items.map(({ task, deadline }) =>
+      `• ใบงาน ${task.taskNo || '-'} (${task.project || '-'}) จบงานเมื่อ ${fmtThaiDate(task.statusUpdatedAt || task.updatedAt || task.createdAt)} กำหนดวางบิลภายใน ${fmtThaiDate(deadline)}`);
+    const body = `เรียน ผู้รับเหมา (${company}),\n\nระบบ V-Track ตรวจพบว่าใบงานต่อไปนี้จบงานแล้ว แต่ยังไม่ได้รับเอกสารวางบิลภายในกำหนด:\n\n${lines.join('\n')}\n\nกรุณาส่งเอกสารวางบิลโดยเร็วที่สุด หากส่งเอกสารแล้วสามารถตอบกลับอีเมลนี้ได้ครับ\n--------------------------------------------------\nระบบติดตามงานแจ้งซ่อม V-Track`;
+    const ok = await triggerEmailNotification({ company }, 'billing_reminder', {
+      toEmail: toEmailList(settings.companyEmails[company]).join(','),
+      subject: `แจ้งเตือนวางบิลเกินกำหนด: ${company} (${items.length} ใบงาน)`,
+      body,
+      htmlBody: `<div style="font-family:Tahoma,Arial,sans-serif;font-size:14px;line-height:1.6;color:#1e293b">${escHtml(body).replace(/\n/g, '<br>')}</div>`
+    }, settings);
+    if (ok) count += items.length;
+    else await updateDoc(ref, Object.fromEntries(items.map(({ task }) => [`billingReminders.${task.id}`, deleteField()]))); // ส่งไม่ได้ → ปล่อยให้ลองใหม่รอบหน้า
+  }
+  return count;
+};
+
 function CompanyRow({ name, emails, onAddEmails, onRemoveEmail, onDelete }) {
   const [val, setVal] = useState('');
   const [err, setErr] = useState('');
@@ -659,7 +710,8 @@ export default function App() {
     companies: [], 
     notificationEmail: '', 
     webhookUrl: '', 
-    companyEmails: {} 
+    companyEmails: {},
+    billingReminders: {}
   });
   const [loading, setLoading] = useState(true);
   const [systemError, setSystemError] = useState('');
@@ -697,7 +749,8 @@ export default function App() {
           companies: data.companies || [],
           notificationEmail: data.notificationEmail || '',
           webhookUrl: data.webhookUrl || '',
-          companyEmails: data.companyEmails || {}
+          companyEmails: data.companyEmails || {},
+          billingReminders: data.billingReminders || {}
         });
       } else {
         const def = { 
@@ -705,7 +758,8 @@ export default function App() {
           companies: ['บริษัท ก'],
           notificationEmail: '',
           webhookUrl: '',
-          companyEmails: {}
+          companyEmails: {},
+          billingReminders: {}
         };
         setDoc(settingsRef, def).catch(console.error);
         setSettings(def);
@@ -722,6 +776,14 @@ export default function App() {
 
     return () => { unsubSettings(); unsubTasks(); };
   }, [user]);
+
+  // เจ้าหน้าที่ปลดล็อกแอป → ส่งอีเมลเตือนวางบิลเกินกำหนดอัตโนมัติ 1 ครั้งต่อการเปิดแอป
+  const billingCheckRan = useRef(false);
+  useEffect(() => {
+    if (!isUnlocked || loading || !settings.webhookUrl || billingCheckRan.current) return;
+    billingCheckRan.current = true;
+    sendBillingReminders(tasks, settings).catch(e => console.error('Billing reminder error:', e));
+  }, [isUnlocked, loading, settings, tasks]);
 
   // Keep viewDetailTask in sync with tasks updates
   useEffect(() => {
@@ -3659,6 +3721,9 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
   const [compEmail, setCompEmail] = useState('');
   const [tab, setTab] = useState('lists');
   const [compSearch, setCompSearch] = useState('');
+  const [onlyNoEmail, setOnlyNoEmail] = useState(false);
+  const [billingMsg, setBillingMsg] = useState('');
+  const [isSendingBilling, setIsSendingBilling] = useState(false);
   const [emailMsg, setEmailMsg] = useState('');
   const [showGasModal, setShowGasModal] = useState(false);
   const [testEmailStatus, setTestEmailStatus] = useState('');
@@ -3892,7 +3957,28 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
     { id: 'report', label: 'รายงาน & สำรองข้อมูล' },
     { id: 'system', label: 'ระบบ & คลังยกเลิก' },
   ];
-  const filteredCompanies = settings.companies.filter(x => x.toLowerCase().includes(compSearch.trim().toLowerCase()));
+  const hasNoEmail = (name) => !toEmailList(settings.companyEmails?.[name]).length;
+  const noEmailCount = settings.companies.filter(hasNoEmail).length;
+  const filteredCompanies = settings.companies.filter(x =>
+    x.toLowerCase().includes(compSearch.trim().toLowerCase()) && (!onlyNoEmail || hasNoEmail(x)));
+
+  const billingOverdue = getBillingOverdue(tasks);
+  const billingState = ({ task }) =>
+    settings.billingReminders?.[task.id] ? 'sent' : hasNoEmail(task.company) ? 'noEmail' : 'pending';
+  const pendingBilling = billingOverdue.filter(x => billingState(x) === 'pending').length;
+
+  const handleSendBilling = async () => {
+    setIsSendingBilling(true);
+    try {
+      const n = await sendBillingReminders(tasks, settings);
+      setBillingMsg(n ? `ส่งอีเมลแจ้งเตือนแล้ว ${n} ใบงาน` : 'ไม่มีใบงานที่ต้องส่งเพิ่ม');
+    } catch (e) {
+      setBillingMsg('ส่งไม่สำเร็จ: ' + e.message);
+    } finally {
+      setIsSendingBilling(false);
+      setTimeout(() => setBillingMsg(''), 7000);
+    }
+  };
   const sectionTitle = 'text-lg font-black border-b-4 border-black pb-2 mb-4';
 
   return (
@@ -3940,6 +4026,14 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
               </div>
               {emailMsg && <p className="text-xs font-bold text-[#B91C1C]">{emailMsg}</p>}
             </form>
+            <div className="flex mb-3" role="group" aria-label="กรองร้านค้า">
+              <button type="button" aria-pressed={!onlyNoEmail} onClick={() => setOnlyNoEmail(false)} className={`min-h-12 px-4 text-sm font-extrabold border-2 border-black ${!onlyNoEmail ? 'bg-black text-white' : 'bg-white hover:bg-[#FFD93D]'}`}>
+                ทั้งหมด <span className="num">({settings.companies.length})</span>
+              </button>
+              <button type="button" aria-pressed={onlyNoEmail} onClick={() => setOnlyNoEmail(true)} className={`min-h-12 px-4 text-sm font-extrabold border-2 border-black -ml-0.5 ${onlyNoEmail ? 'bg-black text-white' : noEmailCount ? 'bg-[#FF5C5C] hover:bg-[#FFD93D]' : 'bg-white hover:bg-[#FFD93D]'}`}>
+                ยังไม่มีอีเมล <span className="num">({noEmailCount})</span>
+              </button>
+            </div>
             {settings.companies.length > 6 && (
               <div className="relative mb-3">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
@@ -3957,7 +4051,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
                   onDelete={() => handleDeleteCompany(name)}
                 />
               ))}
-              {filteredCompanies.length === 0 && <p className="text-sm font-medium opacity-70">{settings.companies.length ? 'ไม่พบร้านค้าที่ค้นหา' : 'ยังไม่มีร้านค้า'}</p>}
+              {filteredCompanies.length === 0 && <p className="text-sm font-medium opacity-70">{!settings.companies.length ? 'ยังไม่มีร้านค้า' : onlyNoEmail && !compSearch.trim() ? 'ทุกร้านค้ามีอีเมลครบแล้ว' : 'ไม่พบร้านค้าที่ค้นหา'}</p>}
             </div>
           </div>
         </div>
@@ -4001,6 +4095,37 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
               {isTestingEmail ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
               <span>{isTestingEmail ? 'กำลังส่งทดสอบ...' : 'ทดสอบส่งอีเมล'}</span>
             </button>
+          </div>
+
+          <div className="border-t-4 border-black pt-5 space-y-3">
+            <h4 className="text-lg font-black">แจ้งเตือนวางบิลเกินกำหนด <span className="num">({billingOverdue.length})</span></h4>
+            <p className="text-sm font-medium">ใบงานสถานะ "จบงานและรอรับเอกสารวางบิล" ที่ยังไม่เปลี่ยนเป็น "ได้รับเอกสารวางบิลแล้ว": จบงานวันที่ 1-9 ต้องวางบิลภายในวันที่ 20 ของเดือนนั้น, จบงานวันที่ 10 เป็นต้นไปภายในวันที่ 15 ของเดือนถัดไป ระบบส่งอีเมลหาบริษัทอัตโนมัติเมื่อเจ้าหน้าที่เข้าโหมดแอดมิน (ครั้งเดียวต่อใบงาน)</p>
+            {billingOverdue.length > 0 ? (
+              <ul className="space-y-2 max-h-72 overflow-auto custom-scrollbar pr-1">
+                {billingOverdue.map(x => {
+                  const s = billingState(x);
+                  return (
+                    <li key={x.task.id} className="border-2 border-black bg-white p-3 flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-black break-words">{x.task.company || '-'}</div>
+                        <div className="text-sm font-medium">ใบงาน <span className="num">{x.task.taskNo || '-'}</span> · กำหนดวางบิล <span className="num">{fmtThaiDate(x.deadline)}</span></div>
+                      </div>
+                      <span className={`border-2 border-black px-2 py-1 text-xs font-extrabold shrink-0 ${s === 'sent' ? 'bg-[#B8F2C9]' : s === 'noEmail' ? 'bg-[#FF5C5C]' : 'bg-[#FFD93D]'}`}>
+                        {s === 'sent' ? 'ส่งแจ้งเตือนแล้ว' : s === 'noEmail' ? 'ยังไม่มีอีเมล' : 'รอส่ง'}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm font-medium opacity-70">ไม่มีใบงานที่วางบิลเกินกำหนด</p>
+            )}
+            {billingMsg && <div className="border-2 border-black bg-[#BDE3FF] p-3 text-sm font-bold">{billingMsg}</div>}
+            <button type="button" disabled={isSendingBilling || !pendingBilling || !settings.webhookUrl} onClick={handleSendBilling} className="brut-btn min-h-12 px-5 bg-white font-extrabold text-sm flex items-center gap-2 disabled:opacity-50">
+              {isSendingBilling ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
+              <span>ส่งแจ้งเตือนตอนนี้ <span className="num">({pendingBilling})</span></span>
+            </button>
+            {!settings.webhookUrl && <p className="text-xs font-bold text-[#B91C1C]">ต้องตั้งค่า Webhook URL ก่อนจึงจะส่งได้</p>}
           </div>
         </div>
       )}

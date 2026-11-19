@@ -11,12 +11,11 @@
     font-variant-numeric: tabular-nums;
   }
 
-  h1, h2, h3, .font-serif-luxury {
-    font-family: 'Noto Sans Thai', system-ui, sans-serif;
+  h1, h2, h3 {
     font-weight: 800;
   }
 
-  .font-mono-tech, .num {
+  .num {
     font-family: 'Space Grotesk', 'Noto Sans Thai', sans-serif;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0;
@@ -37,124 +36,11 @@
 .brut-btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 0 #111; }
 .brut-btn:active { transform: translate(3px, 3px); box-shadow: 0 0 0 0 #111; }
 
-/* --- Architectural Contemporary & 90s Heritage Fusion (LH Signature) --- */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: #FFFBEB; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #777; }
 
-/* Hairline drafting blueprint grid */
-.bg-drafting-grid {
-  background-image: 
-    linear-gradient(to right, rgba(176, 135, 49, 0.07) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(176, 135, 49, 0.07) 1px, transparent 1px);
-  background-size: 28px 28px;
-}
-
-.bg-dot-matrix {
-  background-image: radial-gradient(rgba(0, 60, 113, 0.12) 1px, transparent 1px);
-  background-size: 18px 18px;
-}
-
-/* 90s Precision Drafting Technical Crosshair */
-.drafting-crosshair {
-  position: relative;
-}
-.drafting-crosshair::before {
-  content: "⌖";
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 10px;
-  color: #B08731;
-  opacity: 0.6;
-}
-
-/* Tactile 90s Architectural Card with Contemporary Luxury finish */
-.asym-card, .asym-card-inverse {
-  border-radius: 0;
-  background: #FFFFFF;
-  border: 2px solid #111;
-  box-shadow: 4px 4px 0 0 #111;
-  position: relative;
-  transition: transform 0.1s, box-shadow 0.1s;
-}
-
-.asym-card:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 6px 6px 0 0 #111;
-}
-
-/* Dynamic Flowing Wave Ribbon Line */
-@keyframes waveFlow {
-  0% {
-    stroke-dashoffset: 0;
-  }
-  100% {
-    stroke-dashoffset: 1200;
-  }
-}
-
-@keyframes gentleFloat {
-  0%, 100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-4px) rotate(0.3deg);
-  }
-}
-
-.animate-wave-flow {
-  stroke-dasharray: 20, 10;
-  animation: waveFlow 45s linear infinite;
-}
-
-.animate-gentle-float {
-  animation: gentleFloat 6s ease-in-out infinite;
-}
-
-/* 80s Postmodern Stamp & Registration Mark */
-.tech-stamp {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #8C7B63;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.tech-stamp::before {
-  content: "⊕";
-  color: #C5A059;
-  font-size: 11px;
-}
-
-/* Architectural Horizon separator */
-.lh-horizon-rule {
-  height: 1px;
-  background: linear-gradient(90deg, #C5A059 0%, rgba(197, 160, 89, 0.35) 40%, rgba(0, 51, 102, 0.08) 85%, transparent 100%);
-}
-
-.lh-gold-glow {
-  box-shadow: 0 0 25px rgba(197, 160, 89, 0.2);
-}
-
-/* Custom Scrollbar for Architectural Feel */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #F3EFE6;
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #D4C9B5;
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #C5A059;
-}
-/* --- Form fields (brutalist) --- */
+/* --- Form fields --- */
 .field, .input-style {
   width: 100%;
   min-height: 48px;

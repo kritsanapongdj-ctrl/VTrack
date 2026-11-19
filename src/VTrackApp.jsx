@@ -647,7 +647,7 @@ function CompanyRow({ name, emails, onAddEmails, onRemoveEmail, onDelete }) {
         {emails.length > 0 ? (
           <ul className="flex flex-wrap gap-2">
             {emails.map(em => (
-              <li key={em} className="flex items-center border-2 border-black bg-[#BDE3FF] text-sm font-bold">
+              <li key={em} className="flex items-center border-2 border-black bg-white text-sm font-bold">
                 <span className="px-2 py-1 break-all">{em}</span>
                 <button onClick={() => onRemoveEmail(em)} className="min-h-9 min-w-9 flex items-center justify-center border-l-2 border-black bg-white hover:bg-[#FF5C5C]" aria-label={`ลบอีเมล ${em}`}>
                   <X size={14}/>
@@ -679,8 +679,6 @@ const moveStatus = (task, newStatus, onSave) => {
 };
 
 function InlineStatusSelect({ task, onSave, onRequestCancel, onRequestDisbursement }) {
-  const s = STATUSES.find(x => x.name === task.status);
-  
   const handleChange = (e) => {
     const newStatus = e.target.value;
     if (newStatus === task.status) return;
@@ -702,8 +700,7 @@ function InlineStatusSelect({ task, onSave, onRequestCancel, onRequestDisburseme
       <select 
         value={task.status} 
         onChange={handleChange}
-        className="w-full appearance-none pl-3 pr-8 min-h-12 text-sm font-extrabold border-2 border-black cursor-pointer outline-none focus:outline-3 focus:outline-black"
-        style={{backgroundColor: s?.bgColor || '#f3f4f6', color: s?.color || '#374151'}}
+        className="w-full appearance-none pl-3 pr-8 min-h-12 text-sm font-extrabold border-2 border-black bg-white cursor-pointer"
       >
         {STATUSES.map(st => (
           <option key={st.id} value={st.name}>{st.name}</option>
@@ -2531,15 +2528,15 @@ const formatThaiDate = (dateStr) => {
   }
 };
 
-function DocCard({ index, title, fileName, fallbackName, hasFile, emptyText, okText, previewTitle, previewLabel, onPreview, onDownload, tone }) {
+function DocCard({ index, title, fileName, fallbackName, hasFile, emptyText, okText, previewTitle, previewLabel, onPreview, onDownload }) {
   return (
-    <div className={`brut p-4 flex flex-col justify-between ${tone}`}>
+    <div className={`p-4 flex flex-col justify-between ${hasFile ? 'brut' : 'border-2 border-dashed border-black'}`}>
       <div>
-        <span className="text-xs font-extrabold uppercase tracking-wide block mb-1">{index}. {title}</span>
+        <span className="text-sm font-extrabold block mb-1">{index}. {title}</span>
         {hasFile ? (
           <div>
             <p className="text-sm font-bold truncate" title={fileName}>{fileName || fallbackName}</p>
-            <span className="text-xs font-bold">✓ {okText}</span>
+            <span className="text-sm font-bold">✓ {okText}</span>
           </div>
         ) : (
           <span className="text-sm font-medium opacity-70">{emptyText}</span>
@@ -2725,7 +2722,7 @@ function TaskDetailView({
 
           {/* Hero: วันทำจ่าย & วันนัดหมาย */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="brut bg-[#B8F2C9] p-4 flex flex-col justify-between">
+            <div className="brut p-4 flex flex-col justify-between">
               <div>
                 <div className="flex items-center gap-2 text-sm font-extrabold">
                   <DollarSign size={18}/>
@@ -2750,7 +2747,7 @@ function TaskDetailView({
               </div>
             </div>
 
-            <div className="brut bg-[#BDE3FF] p-4 flex flex-col justify-between">
+            <div className="brut p-4 flex flex-col justify-between">
               <div>
                 <div className="flex items-center gap-2 text-sm font-extrabold">
                   <CalendarDays size={18}/>
@@ -2795,7 +2792,7 @@ function TaskDetailView({
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <DocCard
-                index={1} title="ใบเสนอราคา" tone="bg-[#FFF3B0]"
+                index={1} title="ใบเสนอราคา"
                 hasFile={hasQuote} fileName={task.quoteFileName} fallbackName="ใบเสนอราคา.pdf"
                 emptyText="ยังไม่มีไฟล์แนบ" okText="แนบไฟล์แล้ว" previewLabel="เปิดดูเอกสาร"
                 previewTitle={`ใบเสนอราคา: ${task.quoteFileName || 'quotation.pdf'}`}
@@ -2803,7 +2800,7 @@ function TaskDetailView({
                 onDownload={() => onRequestDownload(task.quoteFileUrl || task.quoteFileId, task.quoteFileName)}
               />
               <DocCard
-                index={2} title="ลายเซ็นต์อนุมัติ" tone="bg-[#E4DCFF]"
+                index={2} title="ลายเซ็นต์อนุมัติ"
                 hasFile={hasSigned} fileName={task.signedFileName} fallbackName="signed_quote.pdf"
                 emptyText="ยังไม่ได้รับการเซ็นต์" okText="ประทับตราแล้ว" previewLabel="ดูฉบับมีลายเซ็น"
                 previewTitle={`ฉบับเซ็นต์อนุมัติ: ${task.signedFileName || 'signed_quote.pdf'}`}
@@ -2811,7 +2808,7 @@ function TaskDetailView({
                 onDownload={() => onRequestDownload(task.signedFileUrl || task.signedFileId, task.signedFileName)}
               />
               <DocCard
-                index={3} title="ใบงานแจ้งซ่อม" tone="bg-[#D6EEFF]"
+                index={3} title="ใบงานแจ้งซ่อม"
                 hasFile={hasTaskFile} fileName={task.taskFileName} fallbackName="task_order.pdf"
                 emptyText="ยังไม่มีใบงาน" okText="แนบใบงานแล้ว" previewLabel="เปิดดูใบงาน"
                 previewTitle={`ใบงานแจ้งซ่อม: ${task.taskFileName || 'task_order.pdf'}`}
@@ -3370,41 +3367,15 @@ function Field({ label, children }) {
 }
 
 function StatusTag({ label }) {
-  const s = STATUSES.find(x => x.name === label);
-  // Refined 80s Architectural Specification Badge: Tactile, dignified, high contrast, zero glare
-  const tapeStyles = {
-    'รอใบเสนอราคา': { bg: '#475569', top: '#64748B', bottom: '#1E293B', dot: '#CBD5E1', border: '#334155' },
-    'อยู่ระหว่างตรวจสอบใบเสนอราคา': { bg: '#92400E', top: '#B45309', bottom: '#78350F', dot: '#FDE68A', border: '#78350F' },
-    'อนุมัติใบเสนอราคาแล้ว': { bg: '#3730A3', top: '#4338CA', bottom: '#312E81', dot: '#C7D2FE', border: '#312E81' },
-    'เปิดใบงานในระบบแล้ว': { bg: '#1E40AF', top: '#1D4ED8', bottom: '#1E3A8A', dot: '#BFDBFE', border: '#1E3A8A' },
-    'จบงานและรอรับเอกสารวางบิล': { bg: '#6B21A8', top: '#7E22CE', bottom: '#581C87', dot: '#E9D5FF', border: '#581C87' },
-    'ได้รับเอกสารวางบิลแล้ว': { bg: '#9F1239', top: '#BE123C', bottom: '#881337', dot: '#FECDD3', border: '#881337' },
-    'ส่งเอกสารเบิกจ่ายแล้ว': { bg: '#065F46', top: '#047857', bottom: '#064E3B', dot: '#A7F3D0', border: '#064E3B' },
-    'ยกเลิก': { bg: '#991B1B', top: '#B91C1C', bottom: '#7F1D1D', dot: '#FECACA', border: '#7F1D1D' }
-  };
-
-  const tape = tapeStyles[label] || { 
-    bg: s?.color || '#334155', 
-    top: '#64748B', 
-    bottom: '#1E293B', 
-    dot: '#E2E8F0',
-    border: '#1E293B'
-  };
-
+  const stage = STAGES.find(x => x.statuses.includes(label));
+  const bg = stage ? stage.color : label === 'ยกเลิก' ? '#FF5C5C' : '#fff';
   return (
-    <span 
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-none text-sm font-bold text-white whitespace-nowrap shadow-[0_1px_3px_rgba(0,0,0,0.25)] select-none shrink-0"
-      style={{
-        backgroundColor: tape.bg,
-        borderTop: `1.5px solid ${tape.top}`,
-        borderBottom: `2px solid ${tape.bottom}`,
-        borderLeft: `1px solid ${tape.border || 'rgba(0,0,0,0.15)'}`,
-        borderRight: `1px solid ${tape.border || 'rgba(0,0,0,0.15)'}`,
-      }}
+    <span
+      className="inline-flex items-center px-2.5 py-1 text-sm font-bold text-black border-2 border-black whitespace-nowrap select-none shrink-0"
+      style={{ backgroundColor: bg }}
       title={`สถานะ: ${label}`}
     >
-      <span className="w-1.5 h-1.5 rounded-full inline-block shrink-0 ring-1 ring-white/20" style={{ backgroundColor: tape.dot }} />
-      <span>{label}</span>
+      {label}
     </span>
   );
 }
@@ -3860,7 +3831,7 @@ function SettingsPanel({ settings, updateSettings, tasks, onSave, onClear, onRes
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
             <button onClick={() => triggerPrint({ selectedMonth: reportMonth, filterProj: reportProj, filterComp: reportComp, filterStatus: reportStatus })} className="brut-btn flex-1 min-h-12 bg-[#FFD93D] font-extrabold flex items-center justify-center gap-2"><Printer size={18}/><span>พิมพ์รายงาน PDF</span></button>
-            <button onClick={handleExportExcel} className="brut-btn flex-1 min-h-12 bg-[#B8F2C9] font-extrabold flex items-center justify-center gap-2"><FileDown size={18}/><span>ดาวน์โหลด Backup Excel</span></button>
+            <button onClick={handleExportExcel} className="brut-btn flex-1 min-h-12 bg-white font-extrabold flex items-center justify-center gap-2"><FileDown size={18}/><span>ดาวน์โหลด Backup Excel</span></button>
           </div>
         </div>
       )}

@@ -5,40 +5,39 @@
 @layer base {
   body {
     font-family: 'Noto Sans Thai', system-ui, sans-serif;
-    background-color: #FFFBEB;
-    color: #111;
+    background-color: #F2F2F2;
+    color: #1A1C1E;
     overflow-x: hidden;
     font-variant-numeric: tabular-nums;
   }
 
   h1, h2, h3 {
-    font-weight: 800;
+    font-weight: 500;
   }
 
   .num {
-    font-family: 'Space Grotesk', 'Noto Sans Thai', sans-serif;
+    font-family: 'Noto Sans Thai', system-ui, sans-serif;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0;
   }
 
-  ::selection { background: #FFD93D; color: #111; }
-  :focus-visible { outline: 3px solid #111; outline-offset: 2px; }
+  ::selection { background: #E3C27A; color: #1A1C1E; }
+  :focus-visible { outline: 2px solid #003C71; outline-offset: 2px; }
 }
 
-/* --- Neo-brutalist primitives --- */
-.brut { background: #fff; border: 2px solid #111; box-shadow: 4px 4px 0 0 #111; }
-.brut-panel { border: 3px solid #111; box-shadow: 8px 8px 0 0 #111; }
+/* --- LH surface primitives (names kept from the old theme so markup stays) --- */
+.brut { background: #fff; border: 1px solid #D9DEE4; }
+.brut-panel { border: 1px solid #D9DEE4; border-top: 3px solid #003C71; box-shadow: 0 8px 32px rgba(0,60,113,.18); }
 .brut-btn {
-  border: 2px solid #111;
-  box-shadow: 3px 3px 0 0 #111;
-  transition: transform 0.1s, box-shadow 0.1s;
+  border: 1px solid #003C71;
+  transition: background-color 0.15s, color 0.15s, opacity 0.15s;
 }
-.brut-btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 0 #111; }
-.brut-btn:active { transform: translate(3px, 3px); box-shadow: 0 0 0 0 #111; }
+.brut-btn:hover { filter: brightness(0.95); }
+.brut-btn:active { transform: translateY(1px); }
 
 .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: #FFFBEB; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #777; }
+.custom-scrollbar::-webkit-scrollbar-track { background: #F2F2F2; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #9AA5B1; }
 
 /* --- Form fields --- */
 .field, .input-style {
@@ -46,12 +45,20 @@
   min-height: 48px;
   padding: 0.6rem 0.9rem;
   background: #fff;
-  border: 2px solid #111;
+  border: 1px solid #B8C0CA;
   border-radius: 0;
   font-size: 0.95rem;
-  font-weight: 600;
-  color: #111;
+  font-weight: 400;
+  color: #1A1C1E;
 }
-.field::placeholder, .input-style::placeholder { color: #555; font-weight: 500; }
-.field:focus, .input-style:focus { outline: 3px solid #111; outline-offset: 0; background: #FFF7CC; }
+.field::placeholder, .input-style::placeholder { color: #6B7480; }
+.field:focus, .input-style:focus { outline: 2px solid #003C71; outline-offset: 0; border-color: #003C71; }
 textarea.input-style { min-height: 96px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* stamp shown when a task advances a stage */
+@keyframes vt-stamp { 0% { opacity: 0; transform: scale(1.6) rotate(-8deg); } 25% { opacity: 1; transform: scale(1) rotate(-6deg); } 80% { opacity: 1; } 100% { opacity: 0; transform: scale(1) rotate(-6deg); } }
+.vt-stamp { animation: vt-stamp 1.4s ease-out forwards; }

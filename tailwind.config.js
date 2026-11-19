@@ -1,8 +1,5 @@
 /** @type {import('tailwindcss').Config} */
-// Neo-brutalist theme: square corners, ink borders, hard offset shadows,
-// and a clear numeric face (Space Grotesk, tabular) in place of mono/serif.
-const hard = (n) => `${n}px ${n}px 0 0 #111`;
-
+// LH-direction theme: square corners, navy + gold on a mist canvas, hairline borders.
 export default {
   content: [
     "./index.html",
@@ -10,13 +7,25 @@ export default {
   ],
   theme: {
     extend: {
+      colors: {
+        lh: {
+          navy: '#003C71',
+          gold: '#B08731',
+          goldlt: '#E3C27A',
+          ink: '#1A1C1E',
+          mist: '#F2F2F2',
+          line: '#D9DEE4',
+          brick: '#A32A22',
+          green: '#1F6B4A',
+        },
+      },
       fontFamily: {
         sans: ['"Noto Sans Thai"', 'system-ui', 'sans-serif'],
-        mono: ['"Space Grotesk"', '"Noto Sans Thai"', 'system-ui', 'sans-serif'],
+        mono: ['"Noto Sans Thai"', 'system-ui', 'sans-serif'],
       },
       borderRadius: { lg: '0', xl: '0', '2xl': '0', '3xl': '0' },
-      borderColor: { DEFAULT: '#111' },
-      boxShadow: { sm: hard(2), DEFAULT: hard(3), md: hard(4), lg: hard(5), xl: hard(6), '2xl': hard(8) },
+      borderColor: { DEFAULT: '#D9DEE4' },
+      boxShadow: { sm: 'none', DEFAULT: 'none', md: '0 1px 2px rgba(0,60,113,.08)', lg: '0 2px 8px rgba(0,60,113,.12)', xl: '0 4px 16px rgba(0,60,113,.14)', '2xl': '0 8px 32px rgba(0,60,113,.18)' },
     },
   },
   plugins: [],

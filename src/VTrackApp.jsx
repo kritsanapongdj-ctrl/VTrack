@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, FileText, Settings, PlusCircle, 
   Upload, Search, Edit, Trash2, X, AlertCircle, Menu, ChevronLeft, ChevronRight, 
-  User, Filter, CalendarDays, FileDown, Printer, Trash, MapPin, Building2, Briefcase,
+  User, CalendarDays, FileDown, Printer, Trash, MapPin, Building2, Briefcase,
   Paperclip, PenTool, CheckCircle2, Clock, AlertTriangle, ArrowRight, Download,
   Lock, Unlock, HardDrive, History, Eye, RotateCcw, ShieldCheck, DollarSign, Sparkles, Loader2, Image as ImageIcon,
   Mail, Send, Copy, Check
@@ -89,6 +89,22 @@ const isScheduleOverdue = (task) => {
   const today = new Date().toISOString().slice(0, 10);
   return today > task.endDate;
 };
+
+// ป้ายบอกว่าเลยมากี่วัน (แทนป้าย "เลยกำหนด" เฉยๆ ที่แยกลำดับความเร่งด่วนไม่ได้)
+const DAY_MS = 86400000;
+const lateLabel = (task) => {
+  if (isScheduleOverdue(task)) {
+    const days = Math.floor((Date.now() - new Date(task.endDate).getTime()) / DAY_MS);
+    return `เลยวันจบงาน ${Math.max(1, days)} วัน`;
+  }
+  if (isOverdue(task)) {
+    const since = task.statusUpdatedAt || task.updatedAt || task.createdAt;
+    return `ค้างวางบิล ${Math.floor((Date.now() - since) / DAY_MS)} วัน`;
+  }
+  return null;
+};
+
+const isSigned = (t) => !!t.signedFileUrl || t.status === 'อนุมัติใบเสนอราคาแล้ว' || t.status === 'เปิดใบงานในระบบแล้ว';
 
 // --- Robust Firestore File Storage System ---
 const fileToBase64 = (fileOrBytes, mimeType = 'application/pdf') => {
@@ -1207,8 +1223,8 @@ export default function App() {
               <span className=" font-bold text-2xl tracking-wider text-white">
                 V<span className="text-[#FFD93D]">-TRACK</span>
               </span>
-              <span className="text-xs tracking-[0.2em] font-mono-tech text-[#FFD93D]/80 uppercase">
-                LAND & HOUSES • ENG.
+              <span className="text-sm font-semibold text-[#FFD93D]">
+                Land & Houses
               </span>
             </div>
           ) : (
@@ -1233,44 +1249,34 @@ export default function App() {
           )}
         </nav>
 
-        {/* 80s Architectural Edition Stamp in footer */}
-        {isSidebarOpen && (
-          <div className="p-4 border-t border-[#FFD93D]/15 bg-black border-t-2 border-white/30 relative z-10 text-xs font-mono-tech text-white/50 flex flex-col gap-0.5">
-            <div className="flex items-center justify-between text-[#FFD93D]/80 font-semibold">
-              <span>LH ARCHITECTURE</span>
-              <span>EST. 1983</span>
-            </div>
-            <span>SYS_VER: 2.8.4 [PROD]</span>
-          </div>
-        )}
       </aside>
 
       <main className="flex-1 flex flex-col h-full overflow-hidden relative z-10">
         <header className="h-16 md:h-20 bg-white border-b-4 border-black flex items-center justify-between px-4 md:px-8 sticky top-0 z-30">
           <div className="flex items-center space-x-3">
             <div>
-              <h2 className="text-base md:text-xl  font-black text-black tracking-tight">
-                ระบบจัดการใบงาน V-TRACK
+              <h2 className="text-lg md:text-xl font-black text-black tracking-tight">
+                <span className="md:hidden">V-TRACK • </span>{{ dashboard: 'ติดตามงานซ่อม', add: 'เพิ่มใบงาน', settings: 'ตั้งค่าระบบ' }[activeTab]}
               </h2>
             </div>
           </div>
           <div className="flex items-center space-x-3">
             {isUnlocked ? (
               <button onClick={lockAdmin} className="brut-btn min-h-12 px-4 bg-[#B8F2C9] text-sm font-extrabold flex items-center gap-2" title="ออกจากโหมดแอดมิน">
-                <Unlock size={16}/><span>แอดมิน • ออกจากระบบ</span>
+                <Unlock size={16}/><span className="hidden sm:inline">แอดมิน • ออกจากระบบ</span><span className="sm:hidden">ออก</span>
               </button>
             ) : (
               <button
                 onClick={() => setPasscodeModal({ isOpen: true, title: 'ใส่รหัสผ่านเพื่อเข้าโหมดแอดมิน', onSuccess: () => { setIsUnlocked(true); setPasscodeModal({ isOpen: false, title: '', onSuccess: null }); } })}
                 className="brut-btn min-h-12 px-4 bg-[#FFD93D] text-sm font-extrabold flex items-center gap-2"
               >
-                <Lock size={16}/><span>เข้าสู่ระบบแอดมิน</span>
+                <Lock size={16}/><span className="hidden sm:inline">เข้าสู่ระบบแอดมิน</span><span className="sm:hidden">แอดมิน</span>
               </button>
             )}
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto pb-24 md:pb-8 p-4 md:p-8 custom-scrollbar">
+        <div className={`flex-1 overflow-y-auto ${isUnlocked ? 'pb-24' : 'pb-8'} md:pb-8 p-4 md:p-8 custom-scrollbar`}>
           <div className="max-w-6xl mx-auto">
             {(
               <>
@@ -1310,11 +1316,13 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 border-t border-black flex justify-around items-center h-16 z-30">
-          <MobileNavItem id="dashboard" icon={LayoutDashboard} label="แดชบอร์ด" active={activeTab} set={setActiveTab} />
-          {isUnlocked && <MobileNavItem id="add" icon={PlusCircle} label="เพิ่มใบงาน" active={activeTab} set={setActiveTab} />}
-          {isUnlocked && <MobileNavItem id="settings" icon={Settings} label="ตั้งค่า" active={activeTab} set={setActiveTab} />}
-        </nav>
+        {isUnlocked && (
+          <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t-2 border-black flex justify-around items-center h-16 z-30">
+            <MobileNavItem id="dashboard" icon={LayoutDashboard} label="แดชบอร์ด" active={activeTab} set={setActiveTab} />
+            <MobileNavItem id="add" icon={PlusCircle} label="เพิ่มใบงาน" active={activeTab} set={setActiveTab} />
+            <MobileNavItem id="settings" icon={Settings} label="ตั้งค่า" active={activeTab} set={setActiveTab} />
+          </nav>
+        )}
       </main>
 
       {/* Global Modals for V2 Operations */}
@@ -2971,8 +2979,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
         const isPending = t.status === 'รอใบเสนอราคา' || t.status === 'อยู่ระหว่างตรวจสอบใบเสนอราคา';
         if (!isPending) return false;
       } else if (quickFilter === 'signed') {
-        const isSigned = !!t.signedFileUrl || t.status === 'อนุมัติใบเสนอราคาแล้ว' || t.status === 'เปิดใบงานแล้ว';
-        if (!isSigned) return false;
+        if (!isSigned(t)) return false;
       } else if (quickFilter === 'tobill') {
         const isToBill = t.status === 'จบงานและรอรับเอกสารวางบิล' || t.status === 'ได้รับเอกสารวางบิลแล้ว';
         if (!isToBill) return false;
@@ -3003,7 +3010,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
   }, [baseFilteredTasks]);
 
   const signedQuotesCount = useMemo(() => {
-    return baseFilteredTasks.filter(t => t.signedFileUrl || t.status === 'อนุมัติใบเสนอราคาแล้ว' || t.status === 'เปิดใบงานแล้ว').length;
+    return baseFilteredTasks.filter(isSigned).length;
   }, [baseFilteredTasks]);
 
   const disbursedCount = useMemo(() => {
@@ -3062,348 +3069,180 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
     }
   }, []);
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500 text-left">
-      {/* Masthead + KPI */}
-      <div className="brut-panel bg-[#FFD93D] p-5 md:p-8 space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="w-14 h-14 bg-black text-[#FFD93D] flex items-center justify-center shrink-0 font-black text-2xl">LH</div>
-            <div className="space-y-1">
-              <h2 className="text-3xl md:text-4xl font-black tracking-tight leading-tight">V-TRACK ติดตามงานซ่อม</h2>
-              <p className="text-sm md:text-base font-semibold max-w-2xl">
-                ติดตามใบงาน ตรวจรับใบเสนอราคา และบริหารการเบิกจ่ายโครงการ
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-col items-start lg:items-end gap-1">
-            <span className="brut bg-white px-3 py-2 text-sm font-bold">
-              งวดบัญชี: <span className="num">{selectedMonthFormatted}</span>
-            </span>
-            <span className="text-sm font-bold">{todayThaiFormatted} • <span className="num">{totalTasksCount}</span> รายการในระบบ</span>
-          </div>
-        </div>
+  const hasFilter = filterProj || filterComp || quickFilter !== 'all' || searchTerm;
+  const clearFilters = () => {
+    setFilterProj('');
+    setFilterComp('');
+    setQuickFilter('all');
+    setSearchTerm('');
+  };
+  const pills = [
+    ['all', 'ทั้งหมด', totalTasksCount],
+    ...(overdueCount > 0 ? [['overdue', 'เลยกำหนด', overdueCount]] : []),
+    ['pending', 'รอตรวจรับ', pendingQuotesCount],
+    ['signed', 'เซ็นต์อนุมัติแล้ว', signedQuotesCount],
+    ['tobill', 'รอวางบิล', toBillCount],
+    ['disbursed', 'เบิกจ่ายแล้ว', disbursedCount],
+  ];
+  const fmt = (n) => n.toLocaleString('th-TH', { maximumFractionDigits: 2 });
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="brut bg-white p-4">
-            <div className="text-sm font-extrabold">ใบงานในงวด</div>
-            <div className="num text-4xl font-black mt-1">{totalTasksCount} <span className="text-sm font-bold">ใบงาน</span></div>
-            <div className="mt-2 pt-2 border-t-2 border-black text-sm font-bold flex justify-between"><span>โครงการทั้งหมด</span><span className="num">{settings.projects.length}</span></div>
-          </div>
-          <div className="brut bg-[#B8F2C9] p-4">
-            <div className="text-sm font-extrabold flex items-center justify-between">ตรวจรับและเซ็นต์แล้ว <ShieldCheck size={18}/></div>
-            <div className="num text-4xl font-black mt-1">{signedQuotesCount} <span className="text-sm font-bold">รายการ</span></div>
-            <div className="mt-2 pt-2 border-t-2 border-black text-sm font-bold flex justify-between"><span>สัดส่วน</span><span className="num">{totalTasksCount > 0 ? Math.round((signedQuotesCount / totalTasksCount) * 100) : 0}%</span></div>
-          </div>
-          <div className="brut bg-[#FFB4A2] p-4">
-            <div className="text-sm font-extrabold flex items-center justify-between">รอตรวจรับ <Clock size={18}/></div>
-            <div className="num text-4xl font-black mt-1">{pendingQuotesCount} <span className="text-sm font-bold">รายการ</span></div>
-            <div className="mt-2 pt-2 border-t-2 border-black text-sm font-bold">รอเจ้าหน้าที่อนุมัติ</div>
-          </div>
-          <div className="brut bg-[#BDE3FF] p-4">
-            <div className="text-sm font-extrabold flex items-center justify-between">เบิกจ่ายแล้ว / มูลค่างานในงวด <DollarSign size={18}/></div>
-            <div className="num text-xl font-black mt-1 whitespace-nowrap">฿ {disbursedBudget.toLocaleString()} <span className="text-sm font-bold">/ {totalMonthBudget.toLocaleString()}</span></div>
-            <div className="mt-2 pt-2 border-t-2 border-black text-sm font-bold flex justify-between"><span>ส่งเบิกจ่ายแล้ว</span><span className="num">{disbursedCount} / {baseFilteredTasks.length} งาน</span></div>
-          </div>
+  return (
+    <div className="space-y-4 md:space-y-6 animate-in fade-in duration-500 text-left">
+      {/* KPI */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+        <div className="brut p-3 md:p-4">
+          <div className="text-sm font-extrabold">ใบงานในงวด</div>
+          <div className="num text-3xl font-black mt-1">{totalTasksCount}</div>
+          <div className="hidden sm:block mt-1 text-sm font-semibold text-neutral-700"><span className="num">{settings.projects.length}</span> โครงการ</div>
+        </div>
+        <div className="brut p-3 md:p-4">
+          <div className="text-sm font-extrabold">เซ็นต์อนุมัติแล้ว</div>
+          <div className="num text-3xl font-black mt-1">{signedQuotesCount}</div>
+          <div className="hidden sm:block mt-1 text-sm font-semibold text-neutral-700"><span className="num">{totalTasksCount > 0 ? Math.round((signedQuotesCount / totalTasksCount) * 100) : 0}%</span> ของงวด</div>
+        </div>
+        <div className="brut bg-[#FFD93D] p-3 md:p-4">
+          <div className="text-sm font-extrabold">รอตรวจรับ</div>
+          <div className="num text-3xl font-black mt-1">{pendingQuotesCount}</div>
+          <div className="hidden sm:block mt-1 text-sm font-semibold">รอเจ้าหน้าที่อนุมัติ</div>
+        </div>
+        <div className="brut p-3 md:p-4">
+          <div className="text-sm font-extrabold">เบิกจ่ายแล้ว</div>
+          <div className="num text-2xl md:text-3xl font-black mt-1 break-words">฿ {fmt(disbursedBudget)}</div>
+          <div className="mt-1 text-sm font-semibold text-neutral-700 break-words">จาก <span className="num">฿ {fmt(totalMonthBudget)}</span> · <span className="num">{disbursedCount}/{totalTasksCount}</span> งาน</div>
         </div>
       </div>
 
-      {/* ============================================================== */}
-      {/* 🧭 2. TACTILE CONSOLE & ARCHITECTURAL FILTER BAR               */}
-      {/* ============================================================== */}
-      <div className="asym-card p-5 md:p-6 border border-black shadow-sm bg-white relative overflow-hidden space-y-4">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-drafting-grid opacity-15 pointer-events-none"></div>
-
-        {/* Top Dropdowns: Period, Estate, Contractor + Search */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 relative z-10">
-          {/* Period Selector */}
-          <div className="space-y-1">
-            <label className="text-xs font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
-              <CalendarDays size={12} className="mr-1 text-[#111]"/> งวดเดือน
-            </label>
-            <select 
-              value={selectedMonth} 
-              onChange={e => setSelectedMonth(e.target.value)} 
-              className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#111] focus:ring-1 focus:ring-[#111] text-xs font-semibold text-black transition-all"
-            >
+      {/* Filters */}
+      <div className="brut p-3 md:p-5 space-y-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <label className="block space-y-1">
+            <span className="text-sm font-bold">งวดเดือน</span>
+            <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="field">
               {availableMonths.map(m => (
                 <option key={m} value={m}>
-                  {new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(m))}
+                  {new Intl.DateTimeFormat('th-TH', { month: 'short', year: 'numeric' }).format(new Date(m))}
                 </option>
               ))}
             </select>
-          </div>
-
-          {/* Project / Estate Selector */}
-          <div className="space-y-1">
-            <label className="text-xs font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
-              <Building2 size={12} className="mr-1 text-[#111]"/> โครงการ
-            </label>
-            <select 
-              value={filterProj} 
-              onChange={e => setFilterProj(e.target.value)} 
-              className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#111] focus:ring-1 focus:ring-[#111] text-xs font-semibold text-black transition-all"
-            >
-              <option value="">ทุกโครงการ Land & Houses</option>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-sm font-bold">โครงการ</span>
+            <select value={filterProj} onChange={e => setFilterProj(e.target.value)} className="field">
+              <option value="">ทุกโครงการ</option>
               {settings.projects.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
-          </div>
-
-          {/* Vendor / Contractor Selector */}
-          <div className="space-y-1">
-            <label className="text-xs font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
-              <Briefcase size={12} className="mr-1 text-[#111]"/> ร้านค้า
-            </label>
-            <select 
-              value={filterComp} 
-              onChange={e => setFilterComp(e.target.value)} 
-              className="w-full p-2.5 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#111] focus:ring-1 focus:ring-[#111] text-xs font-semibold text-black transition-all"
-            >
-              <option value="">ทุกร้านค้า / ผู้รับเหมา</option>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-sm font-bold">ร้านค้า</span>
+            <select value={filterComp} onChange={e => setFilterComp(e.target.value)} className="field">
+              <option value="">ทุกร้านค้า</option>
               {settings.companies.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-          </div>
-
-          {/* Keyword Search */}
-          <div className="space-y-1">
-            <label className="text-xs font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider flex items-center">
-              <Search size={12} className="mr-1 text-[#111]"/> ค้นหา
-            </label>
+          </label>
+          <label className="block space-y-1 col-span-2 lg:col-span-1">
+            <span className="text-sm font-bold">ค้นหา</span>
             <div className="relative">
-              <input 
+              <input
                 type="text"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                placeholder="ค้นหาเลขใบงาน, ร้านค้า, พื้นที่..."
-                className="w-full p-2.5 pl-8 bg-[#FAF8F5] rounded-xl border border-black focus:border-[#111] focus:ring-1 focus:ring-[#111] text-xs font-medium text-black placeholder:text-gray-600 transition-all"
+                placeholder="เลขใบงาน, ร้านค้า, พื้นที่"
+                className="field !pl-10 !pr-12"
               />
-              <Search size={13} className="absolute left-2.5 top-3 text-gray-600 pointer-events-none" />
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               {searchTerm && (
-                <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-3 text-gray-600 hover:text-gray-600">
-                  <X size={13} />
+                <button type="button" onClick={() => setSearchTerm('')} aria-label="ล้างคำค้นหา" className="absolute right-0 top-0 h-full w-12 flex items-center justify-center">
+                  <X size={18} />
                 </button>
               )}
             </div>
-          </div>
+          </label>
         </div>
 
-        {/* Quick Filter Status Switcher Pills (90s Hi-Fi Console Buttons) */}
-        <div className="pt-2 border-t border-black flex flex-wrap items-center justify-between gap-2 relative z-10">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-mono-tech text-[#8C7B63] uppercase mr-1 flex items-center">
-              <Filter size={11} className="mr-1 text-[#111]" /> กรองด่วน:
-            </span>
-
-            <button
-              onClick={() => setQuickFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                quickFilter === 'all' 
-                  ? 'bg-black text-white shadow-xs' 
-                  : 'bg-[#FAF8F5] text-gray-600 hover:bg-gray-100 border border-black'
-              }`}
-            >
-              <span>ทั้งหมด</span>
-              <span className="text-xs font-mono-tech opacity-80">({totalTasksCount})</span>
-            </button>
-
-            <button
-              onClick={() => setQuickFilter('pending')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                quickFilter === 'pending' 
-                  ? 'bg-amber-600 text-white shadow-xs' 
-                  : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
-              }`}
-            >
-              <Clock size={12} />
-              <span>รอตรวจรับ</span>
-              <span className="text-xs font-mono-tech opacity-80">({pendingQuotesCount})</span>
-            </button>
-
-            <button
-              onClick={() => setQuickFilter('signed')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                quickFilter === 'signed' 
-                  ? 'bg-emerald-700 text-white shadow-xs' 
-                  : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
-              }`}
-            >
-              <ShieldCheck size={12} />
-              <span>เซ็นต์อนุมัติแล้ว</span>
-              <span className="text-xs font-mono-tech opacity-80">({signedQuotesCount})</span>
-            </button>
-
-            <button
-              onClick={() => setQuickFilter('tobill')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                quickFilter === 'tobill' 
-                  ? 'bg-orange-600 text-white shadow-xs' 
-                  : 'bg-orange-50 text-orange-800 hover:bg-orange-100 border border-orange-200'
-              }`}
-            >
-              <AlertCircle size={12} />
-              <span>รอวางบิล</span>
-              <span className="text-xs font-mono-tech opacity-80">({toBillCount})</span>
-            </button>
-
-            <button
-              onClick={() => setQuickFilter('disbursed')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                quickFilter === 'disbursed' 
-                  ? 'bg-indigo-700 text-white shadow-xs' 
-                  : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-100 border border-indigo-200'
-              }`}
-            >
-              <DollarSign size={12} />
-              <span>เบิกจ่ายแล้ว</span>
-              <span className="text-xs font-mono-tech opacity-80">({disbursedCount})</span>
-            </button>
-
-            {overdueCount > 0 && (
-              <button
-                onClick={() => setQuickFilter('overdue')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                  quickFilter === 'overdue' 
-                    ? 'bg-red-700 text-white shadow-xs' 
-                    : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
-                }`}
-              >
-                <span>⚠️ เลยกำหนด</span>
-                <span className="text-xs font-mono-tech font-bold">({overdueCount})</span>
-              </button>
-            )}
+        <div className="flex items-center gap-2 border-t-2 border-black pt-3">
+          <div className="flex flex-1 gap-2 overflow-x-auto lg:flex-wrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {pills.map(([id, label, count]) => {
+              const on = quickFilter === id;
+              const tone = on ? 'bg-black text-white' : id === 'overdue' ? 'bg-[#FF5C5C] hover:bg-[#ff7a7a]' : 'bg-white hover:bg-[#FFD93D]';
+              return (
+                <button
+                  key={id}
+                  onClick={() => setQuickFilter(id)}
+                  aria-pressed={on}
+                  className={`shrink-0 min-h-12 px-4 border-2 border-black text-sm font-extrabold whitespace-nowrap ${tone}`}
+                >
+                  {label} <span className="num">{count}</span>
+                </button>
+              );
+            })}
           </div>
-
-          {(filterProj || filterComp || quickFilter !== 'all' || searchTerm) && (
-            <button
-              onClick={() => {
-                setFilterProj('');
-                setFilterComp('');
-                setQuickFilter('all');
-                setSearchTerm('');
-              }}
-              className="text-xs font-semibold text-[#111] hover:underline flex items-center gap-1 py-1"
-            >
-              <RotateCcw size={11} /> ล้างตัวกรองทั้งหมด
+          {hasFilter && (
+            <button onClick={clearFilters} className="shrink-0 min-h-12 px-3 text-sm font-extrabold underline flex items-center gap-1">
+              <RotateCcw size={16} /> ล้าง
             </button>
           )}
         </div>
       </div>
 
-      {/* ============================================================== */}
-      {/* 📊 3. ASYMMETRIC 5:7 SPLIT: TELEMETRY & OPERATIONS DOSSIER     */}
-      {/* ============================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column (5/12 cols): Architectural Status Ratio Matrix */}
-        <div className="lg:col-span-5 asym-card p-6 md:p-7 border border-black shadow-sm flex flex-col bg-white relative overflow-hidden">
-          {/* Subtle Dynamic Ribbon Curve in Card Background */}
-          <svg className="absolute -top-10 -right-10 w-60 h-60 pointer-events-none opacity-20" viewBox="0 0 200 200">
-            <path d="M 0,100 C 50,20 150,180 200,100" stroke="#111" strokeWidth="1.5" fill="none" className="animate-wave-flow" />
-          </svg>
-
-          <div className="flex items-center justify-between pb-4 border-b border-black mb-5 relative z-10">
-            <div>
-              <h4 className=" font-bold text-lg md:text-xl text-black">สัดส่วนสถานะงาน</h4>
-              <p className="text-xs font-mono-tech text-[#8C7B63] tracking-widest uppercase">DISPATCH METRICS & RATIOS</p>
-            </div>
-            <span className="text-xs font-mono-tech text-black bg-[#FAF8F5] border border-black px-2.5 py-1 rounded-none font-bold">
-              ⊕ {baseFilteredTasks.length} TASKS
-            </span>
+      {/* รายการงานขึ้นก่อนบนมือถือ, สถานะรวมอยู่ท้าย */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 items-start">
+        <div className="order-2 lg:order-1 lg:col-span-5 brut p-5 md:p-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg md:text-xl">สัดส่วนสถานะงาน</h3>
+            <span className="num text-sm font-bold">{baseFilteredTasks.length} ใบงาน</span>
           </div>
-          
-          {/* Donut Chart with Precision Brass Ring Rim */}
-          <div className="relative my-3 mx-auto flex items-center justify-center z-10">
-            <div className="p-3.5 rounded-full border-2 border-[#111]/40 bg-[#FAF8F5] shadow-inner relative">
-              <div 
-                className="relative w-44 h-44 rounded-full shadow-md flex items-center justify-center transition-all duration-700" 
-                style={pieStyle}
-              >
-                <div className="w-28 h-28 bg-white rounded-full flex flex-col items-center justify-center shadow-sm border border-black z-10">
-                  <span className="text-3xl  font-bold text-black">{baseFilteredTasks.length}</span>
-                  <span className="text-xs font-mono-tech font-bold text-[#8C7B63] uppercase tracking-wider mt-0.5">ใบงานรวม</span>
+
+          <div className="mx-auto w-44 h-44 rounded-full flex items-center justify-center border-2 border-black" style={pieStyle}>
+            <div className="w-28 h-28 bg-white rounded-full flex flex-col items-center justify-center border-2 border-black">
+              <span className="num text-3xl font-black">{baseFilteredTasks.length}</span>
+              <span className="text-sm font-bold">ใบงานรวม</span>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            {stats.filter(s => s.count > 0).map(s => (
+              <div key={s.id} className="flex items-center justify-between gap-2 py-1.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-3.5 h-3.5 shrink-0 border border-black" style={{ backgroundColor: s.color }} />
+                  <span className="text-sm font-semibold">{s.name}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 text-sm">
+                  <span className="num font-black">{s.count}</span>
+                  <span className="num w-10 text-right text-neutral-700">{s.percent}%</span>
                 </div>
               </div>
-            </div>
+            ))}
           </div>
 
-          {/* Architectural Status Specification Table */}
-          <div className="w-full space-y-2 mt-5 relative z-10 border-t border-black pt-4">
-            <div className="flex items-center justify-between text-xs font-mono-tech text-[#8C7B63] uppercase tracking-wider pb-1">
-              <span>สถานะงาน (SPECIFICATION)</span>
-              <span>จำนวน / สัดส่วน</span>
+          <div className="border-t-2 border-black pt-4 space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span>งานที่มีวันทำจ่ายยืนยัน</span>
+              <span className="num font-black">{baseFilteredTasks.filter(t => t.payDate).length} งาน</span>
             </div>
-            {stats.map(s => {
-              const hasItems = s.count > 0;
-              return (
-                <div 
-                  key={s.id} 
-                  className={`flex items-center justify-between p-2 rounded-lg transition-all ${
-                    hasItems ? 'bg-[#FAF8F5]/80 hover:bg-[#FAF8F5] text-gray-800' : 'text-gray-600 opacity-40'
-                  }`}
-                >
-                  <div className="flex items-center space-x-2.5 min-w-0 pr-2">
-                    <div 
-                      className="w-3 h-3 rounded-none shrink-0 border border-black/10" 
-                      style={{ backgroundColor: s.color }}
-                    />
-                    <span className="text-xs font-medium truncate">{s.name}</span>
-                  </div>
-                  <div className="flex items-center space-x-2 shrink-0">
-                    <span className="font-mono-tech font-bold text-xs text-black">{s.count}</span>
-                    <span className="text-xs font-mono-tech bg-white px-1.5 py-0.5 rounded border border-black text-[#8C7B63] min-w-[36px] text-right">
-                      {s.percent}%
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Schedule & Disbursement Quick Highlights */}
-          <div className="mt-5 p-3.5 bg-[#FAF8F5] rounded-xl border border-black space-y-2 relative z-10 text-xs">
-            <div className="text-xs font-mono-tech font-bold text-[#111] uppercase tracking-wider flex items-center gap-1">
-              <span>⌖ HIGHLIGHTS</span>
-              <span className="text-gray-600">• สรุปงวดและนัดหมาย</span>
-            </div>
-            <div className="flex items-center justify-between text-gray-700">
-              <span className="text-xs text-gray-500">งานที่มีวันทำจ่ายยืนยัน:</span>
-              <span className="font-mono-tech font-bold text-emerald-800">
-                {baseFilteredTasks.filter(t => t.payDate).length} งาน
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-gray-700">
-              <span className="text-xs text-gray-500">งานที่มีนัดหมายเข้าทำ:</span>
-              <span className="font-mono-tech font-bold text-black">
-                {baseFilteredTasks.filter(t => t.startDate || t.aptDate).length} งาน
-              </span>
+            <div className="flex items-center justify-between">
+              <span>งานที่มีนัดหมายเข้าทำ</span>
+              <span className="num font-black">{baseFilteredTasks.filter(t => t.startDate || t.aptDate).length} งาน</span>
             </div>
           </div>
         </div>
 
-        {/* Right Column (7/12 cols): Architectural Task Stream */}
-        <div className="lg:col-span-7 asym-card-inverse bg-white border border-black shadow-sm overflow-hidden flex flex-col">
-          <div className="p-5 md:p-6 border-b-2 border-black bg-[#FFD93D] flex justify-between items-center">
-            <div className="flex flex-col">
-              <span className="tech-stamp">MONTHLY OPERATIONS STREAM</span>
-              <h4 className=" font-bold text-lg md:text-xl text-black mt-0.5">
-                สารบบใบงานประจำงวด
-              </h4>
-              <p className="text-xs text-[#111] font-medium">{selectedMonthFormatted}</p>
+        <div className="order-1 lg:order-2 lg:col-span-7 brut overflow-hidden flex flex-col">
+          <div className="px-4 md:px-6 py-4 border-b-2 border-black bg-[#FFD93D] flex justify-between items-center gap-3">
+            <div>
+              <h3 className="text-lg md:text-xl">ใบงานประจำงวด</h3>
+              <p className="text-sm font-semibold">{selectedMonthFormatted}</p>
             </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-mono-tech bg-white px-3 py-1.5 rounded-none border border-black text-black font-bold">
-                ⊕ {finalFilteredTasks.length} RECORDS
-              </span>
-            </div>
+            <span className="num text-sm font-black shrink-0">{finalFilteredTasks.length} รายการ</span>
           </div>
 
-          <div className="flex-1 overflow-auto max-h-[620px] p-4 md:p-6 custom-scrollbar bg-[#F8F6F0]/40">
+          <div className="overflow-auto max-h-[75vh] lg:max-h-[620px] p-3 md:p-6 custom-scrollbar bg-[#F8F6F0]">
             {finalFilteredTasks.length > 0 ? (
               <div className="flex flex-col gap-3.5">
                 {finalFilteredTasks.map(t => {
-                  const isSchedOver = isScheduleOverdue(t);
+                  const late = lateLabel(t);
                   return (
-                    <div 
-                      key={t.id} 
+                    <div
+                      key={t.id}
                       onClick={() => onViewDetail(t)}
                       className="group relative p-4 bg-white border-2 border-black shadow-[4px_4px_0_0_#111] hover:shadow-[6px_6px_0_0_#111] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-1 active:translate-y-1 active:shadow-none transition-all duration-100 cursor-pointer flex flex-col text-left gap-3"
                     >
@@ -3412,86 +3251,69 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
                           <span className="num font-black text-black text-xl whitespace-nowrap bg-[#FFD93D] px-2 border-2 border-black">
                             {t.taskNo}
                           </span>
-                          {isSchedOver && (
-                            <span className="bg-amber-50 text-amber-800 border border-amber-300/60 text-xs font-mono-tech px-2 py-0.5 rounded-none font-bold flex items-center gap-1">
-                              ⚠️ เลยกำหนดจบงาน
-                            </span>
-                          )}
-                          {!isSchedOver && isOverdue(t) && (
-                            <span className="bg-red-50 text-red-700 border border-red-200 text-xs font-mono-tech px-2 py-0.5 rounded-none font-bold uppercase tracking-wider">
-                              เลยกำหนด
-                            </span>
+                          {late && (
+                            <span className="bg-[#FF5C5C] border-2 border-black text-sm font-extrabold px-2 py-0.5">{late}</span>
                           )}
                           {isCarryOver(t) && (
-                            <span className="bg-orange-50 text-orange-700 border border-orange-200 text-xs font-mono-tech px-2 py-0.5 rounded-none font-bold tracking-wider">
+                            <span className="bg-white border-2 border-black text-sm font-bold px-2 py-0.5">
                               ยกยอดจาก {getOriginalMonthStr(t)}
                             </span>
                           )}
                         </div>
-                        
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-gray-600">
-                          <div className="flex items-center space-x-1.5 bg-[#FAF8F5] px-2.5 py-1 rounded-none border border-black">
-                            <Briefcase size={12} className="text-[#111]" />
-                            <span className="text-xs font-bold uppercase tracking-wider truncate max-w-[130px] text-black">{t.company}</span>
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                          <div className="flex items-center gap-1.5 bg-[#FAF8F5] px-2.5 py-1 border border-black">
+                            <Briefcase size={14} />
+                            <span className="text-sm font-bold truncate max-w-[160px]">{t.company}</span>
                           </div>
-                          <div className="flex items-center space-x-1.5 bg-[#FAF8F5] px-2.5 py-1 rounded-none border border-black">
-                            <Building2 size={12} className="text-black" />
-                            <span className="text-xs font-medium truncate max-w-[160px] text-gray-700">{t.project}</span>
+                          <div className="flex items-center gap-1.5 bg-[#FAF8F5] px-2.5 py-1 border border-black">
+                            <Building2 size={14} />
+                            <span className="text-sm font-medium truncate max-w-[180px]">{t.project}</span>
                           </div>
-                          {t.startDate && t.endDate ? (
-                            <div className="flex items-center space-x-1 bg-[#FAF8F5] px-2.5 py-1 rounded-none border border-black text-xs font-semibold text-gray-600">
-                              <CalendarDays size={11} className="text-[#111]" />
-                              <span>{t.startDate} - {t.endDate}</span>
+                          {(t.startDate && t.endDate) || t.aptDate ? (
+                            <div className="flex items-center gap-1.5 bg-[#FAF8F5] px-2.5 py-1 border border-black text-sm font-semibold">
+                              <CalendarDays size={14} />
+                              <span className="num">{t.startDate && t.endDate ? `${t.startDate} - ${t.endDate}` : t.aptDate}</span>
                             </div>
-                          ) : (
-                            t.aptDate && (
-                              <div className="flex items-center space-x-1 bg-[#FAF8F5] px-2.5 py-1 rounded-none border border-black text-xs font-semibold text-gray-600">
-                                <CalendarDays size={11} className="text-[#111]" />
-                                <span>{t.aptDate}</span>
-                              </div>
-                            )
-                          )}
+                          ) : null}
                         </div>
 
-                        {/* File Attachment Badges */}
                         <div className="flex flex-wrap gap-1.5 mt-2.5">
                           {t.quoteFileUrl && (
-                            <span className="bg-[#FAF8F5] text-[#92400E] text-xs px-2 py-0.5 rounded-none font-bold flex items-center gap-1 border border-[#FDE68A]">
-                              <Paperclip size={9} className="text-[#B45309]"/> มีใบเสนอราคา
+                            <span className="bg-white text-sm px-2 py-0.5 font-bold flex items-center gap-1 border border-black">
+                              <Paperclip size={12} /> มีใบเสนอราคา
                             </span>
                           )}
                           {t.signedFileUrl && (
-                            <span className="bg-[#FAF8F5] text-[#1E3A8A] text-xs px-2 py-0.5 rounded-none font-bold flex items-center gap-1 border border-[#BFDBFE]">
-                              <ShieldCheck size={9} className="text-[#1D4ED8]"/> เซ็นต์อนุมัติแล้ว
+                            <span className="bg-white text-sm px-2 py-0.5 font-bold flex items-center gap-1 border border-black">
+                              <ShieldCheck size={12} /> เซ็นต์อนุมัติแล้ว
                             </span>
                           )}
                           {t.taskFileUrl && (
-                            <span className="bg-[#FAF8F5] text-[#1E40AF] text-xs px-2 py-0.5 rounded-none font-bold flex items-center gap-1 border border-[#BFDBFE]">
-                              <FileText size={9} className="text-[#1D4ED8]"/> มีใบงาน
+                            <span className="bg-white text-sm px-2 py-0.5 font-bold flex items-center gap-1 border border-black">
+                              <FileText size={12} /> มีใบงาน
                             </span>
                           )}
                           {t.payDate && (
-                            <span className="bg-emerald-50 text-emerald-800 text-xs px-2 py-0.5 rounded-none font-bold flex items-center gap-1 border border-emerald-200 font-mono-tech">
-                              <DollarSign size={9} className="text-emerald-600" /> วันทำจ่าย: {t.payDate}
+                            <span className="bg-[#B8F2C9] text-sm px-2 py-0.5 font-bold flex items-center gap-1 border border-black">
+                              <DollarSign size={12} /> วันทำจ่าย: <span className="num">{t.payDate}</span>
                             </span>
                           )}
                         </div>
-                        
-                        {t.status === 'จบงานและรอรับเอกสารวางบิล' && (
-                          <div className="mt-3 inline-flex items-center space-x-1.5 bg-orange-50 text-orange-700 px-3 py-1 rounded-none border border-orange-200 w-max animate-pulse">
-                            <AlertCircle size={12} className="text-orange-600" />
-                            <span className="text-xs font-bold tracking-wide">กรุณาส่งเอกสารวางบิลภายในวันที่ 15</span>
+
+                        {t.status === BILL_WAIT_STATUS && (
+                          <div className="mt-3 inline-flex items-center gap-1.5 bg-[#FFD93D] px-3 py-1 border-2 border-black w-max max-w-full">
+                            <AlertCircle size={14} className="shrink-0" />
+                            <span className="text-sm font-bold">กรุณาส่งเอกสารวางบิลภายในวันที่ 15</span>
                           </div>
                         )}
                       </div>
-                      
+
                       <div className="flex flex-row flex-wrap items-center justify-between gap-2 border-t-2 border-black pt-3">
-                        <div>
-                          <StatusTag label={t.status} />
-                        </div>
-                        <div className="flex items-center space-x-1.5 bg-white px-2.5 py-1 border border-black">
-                          <MapPin size={10} className="text-[#111]" />
-                          <span className="text-xs text-black font-bold tracking-wide">{t.area}</span>
+                        <StatusTag label={t.status} />
+                        <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 border border-black">
+                          <MapPin size={14} />
+                          <span className="text-sm font-bold">{t.area}</span>
                         </div>
                       </div>
 
@@ -3500,7 +3322,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
                           onClick={(e) => e.stopPropagation()}
                           className="flex flex-wrap items-center gap-2 border-t-2 border-black pt-3 bg-[#FFFBEB] -mx-4 -mb-4 px-4 pb-4"
                         >
-                          <span className="text-xs font-extrabold">แอดมิน:</span>
+                          <span className="text-sm font-extrabold">แอดมิน:</span>
                           <div className="flex-1 min-w-[180px] max-w-xs">
                             <InlineStatusSelect task={t} onSave={onSave} onRequestCancel={onRequestCancel} onRequestDisbursement={onRequestDisbursement} />
                           </div>
@@ -3513,20 +3335,11 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
                 })}
               </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center py-24 text-gray-600">
-                <CalendarDays size={48} className="mb-3 text-[#111]/30"/>
-                <p className=" text-base font-bold text-black">ไม่พบข้อมูลใบงานตามเงื่อนไขที่เลือก</p>
-                <p className="text-xs font-mono-tech text-gray-600 mt-1 uppercase">NO CORRESPONDING RECORDS FOUND</p>
-                {(filterProj || filterComp || quickFilter !== 'all' || searchTerm) && (
-                  <button
-                    onClick={() => {
-                      setFilterProj('');
-                      setFilterComp('');
-                      setQuickFilter('all');
-                      setSearchTerm('');
-                    }}
-                    className="mt-3 text-xs bg-white text-[#111] font-bold px-3 py-1.5 rounded-lg border border-black hover:bg-[#FAF8F5]"
-                  >
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <CalendarDays size={48} className="mb-3 opacity-30"/>
+                <p className="text-base font-bold">ไม่พบใบงานตามเงื่อนไขที่เลือก</p>
+                {hasFilter && (
+                  <button onClick={clearFilters} className="brut-btn mt-4 min-h-12 px-4 bg-white text-sm font-extrabold">
                     ล้างตัวกรองเพื่อดูทั้งหมด
                   </button>
                 )}
@@ -3684,15 +3497,13 @@ function StatusTag({ label }) {
 
   return (
     <span 
-      className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-none text-xs font-bold tracking-wider text-white whitespace-nowrap shadow-[0_1px_3px_rgba(0,0,0,0.25)] select-none shrink-0"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-none text-sm font-bold text-white whitespace-nowrap shadow-[0_1px_3px_rgba(0,0,0,0.25)] select-none shrink-0"
       style={{
         backgroundColor: tape.bg,
         borderTop: `1.5px solid ${tape.top}`,
         borderBottom: `2px solid ${tape.bottom}`,
         borderLeft: `1px solid ${tape.border || 'rgba(0,0,0,0.15)'}`,
         borderRight: `1px solid ${tape.border || 'rgba(0,0,0,0.15)'}`,
-        textShadow: '0 1px 1px rgba(0,0,0,0.4)',
-        letterSpacing: '0.04em'
       }}
       title={`สถานะ: ${label}`}
     >

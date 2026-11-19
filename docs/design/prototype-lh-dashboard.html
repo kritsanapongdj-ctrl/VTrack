@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V-Track ต้นแบบ LH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #003C71;          /* สีหลัก LH จาก lh.co.th */
+  --navy-bar: #003A6C;      /* พื้นของไฟล์โลโก้ ใช้ให้กลืนกับแถบหัว */
+  --navy-deep: #002A50;
+  --gold: #B08731;          /* เส้นทองใต้หัวข้อ */
+  --gold-wash: #F6EFDD;
+  --ink: #1A1C1E;
+  --ink-soft: #4A5560;
+  --mist: #F2F2F2;
+  --line: #D9DEE4;
+  --brick: #A32A22;         /* ล่าช้า/ปัญหา เท่านั้น */
+  --brick-wash: #FBEDEB;
+  --ok: #1F6B4A;
+  --paper: #FFFFFF;
+}
+* { box-sizing: border-box; margin: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: 'Noto Sans Thai', system-ui, sans-serif;
+  color: var(--ink); background: var(--paper);
+  font-size: 16px; line-height: 1.55; font-variant-numeric: tabular-nums;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---------- แถบต้นแบบ (ไม่ใช่ส่วนของแอป) ---------- */
+.proto { background: var(--ink); color: #fff; font-size: 14px; padding: 8px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.proto b { font-weight: 600; }
+.proto .seg { display: inline-flex; border: 1px solid #fff5; }
+.proto .seg button { background: none; border: 0; padding: 6px 16px; color: #fff; min-height: 44px; }
+.proto .seg button[aria-pressed="true"] { background: #fff; color: var(--ink); font-weight: 600; }
+.proto small { opacity: .7; margin-left: auto; }
+
+/* ---------- หัวเว็บแบบ lh.co.th ---------- */
+.top { background: var(--navy-bar); color: #fff; }
+.top-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px clamp(16px, 4vw, 48px); }
+.brand { font-size: 24px; font-weight: 600; letter-spacing: .06em; line-height: 1; display: inline-flex; align-items: baseline; gap: 6px; }
+.brand small { font-size: 12px; font-weight: 500; letter-spacing: .12em; color: #E3C27A; }
+.who { font-size: 14px; display: flex; align-items: center; gap: 14px; }
+.who .role { border: 1px solid #fff6; padding: 4px 12px; }
+.nav { border-top: 1px solid #ffffff33; display: flex; justify-content: center; overflow-x: auto; scrollbar-width: none; }
+.nav a { color: #fff; text-decoration: none; padding: 13px 22px; white-space: nowrap; font-size: 15px; position: relative; min-height: 48px; display: flex; align-items: center; }
+.nav a + a::before { content: ""; position: absolute; left: 0; top: 30%; height: 40%; width: 1px; background: #ffffff55; }
+.nav a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--gold); }
+
+/* ---------- เนื้อหา ---------- */
+main { max-width: 1200px; margin: 0 auto; padding: clamp(20px, 4vw, 48px) clamp(16px, 4vw, 48px) 80px; }
+h1 { font-weight: 300; font-size: clamp(28px, 4vw, 42px); line-height: 1.2; letter-spacing: 0; }
+.rule { width: 72px; height: 2px; background: var(--gold); margin: 14px 0 0; }
+.lede { color: var(--ink-soft); margin-top: 14px; max-width: 60ch; }
+h2 { font-weight: 500; font-size: 20px; }
+section { margin-top: clamp(32px, 5vw, 56px); }
+.sec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; padding-bottom: 10px; border-bottom: 1px solid var(--navy); }
+.sec-head .aside { color: var(--ink-soft); font-size: 14px; }
+
+/* ปุ่ม: สี่เหลี่ยมทึบกรมท่า เหมือนปุ่ม View All ของ LH */
+.btn { background: var(--navy); color: #fff; border: 1px solid var(--navy); min-height: 48px; padding: 0 22px; font-weight: 500; transition: background .15s, transform .08s; }
+.btn:hover { background: var(--navy-deep); }
+.btn:active { transform: translateY(1px); }
+.btn.ghost { background: transparent; color: var(--navy); }
+.btn.ghost:hover { background: var(--mist); }
+.btn.sm { min-height: 44px; padding: 0 16px; font-size: 15px; }
+.btn.wide { width: 100%; min-height: 56px; font-size: 17px; }
+.btn[disabled] { opacity: .5; cursor: default; }
+
+/* ---------- ต้องจัดการวันนี้ ---------- */
+.todo { list-style: none; padding: 0; }
+.todo li { display: grid; grid-template-columns: 150px 1fr auto; gap: 8px 20px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.todo .meta { min-width: 0; }
+.todo .jobno { font-weight: 600; }
+.todo .sub { color: var(--ink-soft); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.todo .why { font-size: 14px; color: var(--brick); font-weight: 500; }
+.todo .why.soft { color: var(--navy); }
+.empty { padding: 28px 0; color: var(--ink-soft); }
+
+/* ไม้บรรทัดวันที่ล่าช้า: ขีดทุก 1 วัน ยาวสุด 30 วัน */
+.ruler { height: 22px; position: relative; display: block; }
+.ruler i { position: absolute; left: 0; bottom: 0; height: 10px; image-rendering: pixelated; background:
+  repeating-linear-gradient(90deg, currentColor 0 1px, transparent 1px 5px); opacity: .9; transition: width .6s cubic-bezier(.2,.7,.2,1); }
+.ruler b { position: absolute; left: 0; top: 0; font-size: 13px; line-height: 1; font-weight: 600; }
+.ruler.empty-r { color: var(--line); }
+
+/* ---------- ภาพรวมงวด ---------- */
+.overview { display: grid; grid-template-columns: 1fr; gap: 22px; padding-top: 18px; }
+.bar { display: flex; height: 14px; background: var(--mist); }
+.bar span { display: block; height: 100%; transition: width .7s cubic-bezier(.2,.7,.2,1); }
+.bar span + span { border-left: 2px solid #fff; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); }
+.stat { padding: 4px 18px 4px 0; border-right: 1px solid var(--line); margin-right: 18px; }
+.stat:last-child { border-right: 0; margin-right: 0; }
+.stat .k { font-size: 14px; color: var(--ink-soft); display: flex; align-items: center; gap: 8px; }
+.stat .k i { width: 10px; height: 10px; display: inline-block; }
+.stat .v { font-size: 38px; font-weight: 300; line-height: 1.15; }
+.money { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 15px; color: var(--ink-soft); }
+.money .track { flex: 1 1 160px; height: 4px; background: var(--mist); position: relative; }
+.money .track i { position: absolute; inset: 0 auto 0 0; background: var(--gold); transition: width .7s cubic-bezier(.2,.7,.2,1); }
+.money strong { color: var(--ink); font-weight: 500; }
+
+/* ---------- ตารางใบงาน ---------- */
+.tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 16px 0; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { background: var(--paper); border: 1px solid var(--line); min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; gap: 8px; }
+.chip:hover { border-color: var(--navy); }
+.chip[aria-pressed="true"] { background: var(--navy); border-color: var(--navy); color: #fff; }
+.chip .n { font-weight: 600; }
+.search { margin-left: auto; min-height: 44px; border: 1px solid var(--line); padding: 0 14px; font: inherit; width: min(280px, 100%); background: #fff; }
+.search:focus { border-color: var(--navy); outline: 2px solid var(--gold); outline-offset: 0; }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-weight: 500; font-size: 14px; color: var(--ink-soft); padding: 8px 12px 8px 0; border-bottom: 1px solid var(--navy); white-space: nowrap; }
+td { padding: 14px 12px 14px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tbody tr { cursor: pointer; transition: background .12s; }
+tbody tr:hover { background: var(--gold-wash); }
+tbody tr:focus-visible { outline-offset: -2px; }
+td.job .no { font-weight: 600; }
+td.job .co { font-size: 14px; color: var(--ink-soft); }
+td.prog { min-width: 190px; }
+td.act { text-align: right; white-space: nowrap; }
+.num-end { color: var(--ink-soft); font-size: 14px; }
+
+/* เส้นทางสถานะ 4 ขั้น: จุดเติมตามความคืบหน้า */
+.path { display: flex; align-items: center; }
+.path .p { width: 12px; height: 12px; border: 1.5px solid var(--navy); background: #fff; flex: none; transition: background .4s, border-color .4s; }
+.path .p.done { background: var(--navy); }
+.path .p.on { background: var(--gold); border-color: var(--gold); }
+.path .p.paid { background: var(--ok); border-color: var(--ok); }
+.path .l { flex: none; width: 22px; height: 1.5px; background: var(--line); position: relative; }
+.path .l i { position: absolute; inset: 0 auto 0 0; background: var(--navy); width: 0; transition: width .5s ease .1s; }
+.path .l.on i { width: 100%; }
+.state { font-size: 14px; margin-top: 6px; }
+
+/* ---------- ลิ้นชักรายละเอียด ---------- */
+.scrim { position: fixed; inset: 0; background: #0a1a2c66; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 40; }
+.scrim.open { opacity: 1; pointer-events: auto; }
+.sheet { position: fixed; z-index: 50; background: #fff; box-shadow: 0 0 40px #0a1a2c33; overflow-y: auto;
+  top: 0; right: 0; bottom: 0; width: min(520px, 100%); transform: translateX(104%); transition: transform .32s cubic-bezier(.2,.7,.2,1); }
+.sheet.open { transform: none; }
+.sheet-in { padding: 24px clamp(18px, 4vw, 32px) 40px; position: relative; }
+.close { position: absolute; top: 12px; right: 12px; width: 48px; height: 48px; background: none; border: 0; font-size: 26px; line-height: 1; }
+.sheet h3 { font-weight: 300; font-size: 28px; line-height: 1.2; padding-right: 48px; }
+.tblock { margin-top: 22px; border: 1px solid var(--navy); }
+.tblock div { display: grid; grid-template-columns: 110px 1fr; }
+.tblock div + div { border-top: 1px solid var(--line); }
+.tblock dt { background: var(--mist); font-size: 14px; color: var(--ink-soft); padding: 9px 12px; }
+.tblock dd { margin: 0; padding: 9px 12px; }
+.steps { list-style: none; padding: 0; margin-top: 22px; }
+.steps li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; padding-bottom: 14px; position: relative; font-size: 15px; color: var(--ink-soft); }
+.steps li::before { content: ""; width: 11px; height: 11px; border: 1.5px solid var(--navy); background: #fff; margin-top: 7px; justify-self: center; z-index: 1; }
+.steps li::after { content: ""; position: absolute; left: 10.5px; top: 18px; bottom: -7px; width: 1px; background: var(--line); }
+.steps li:last-child::after { display: none; }
+.steps li.done { color: var(--ink); }
+.steps li.done::before { background: var(--navy); }
+.steps li.now { color: var(--ink); font-weight: 600; }
+.steps li.now::before { background: var(--gold); border-color: var(--gold); box-shadow: 0 0 0 4px var(--gold-wash); }
+.next { margin-top: 24px; }
+.next .hint { font-size: 14px; color: var(--ink-soft); margin-top: 8px; }
+.more { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.link { background: none; border: 0; color: var(--brick); text-decoration: underline; min-height: 44px; padding: 0 4px; }
+
+/* ตราประทับเมื่อเลื่อนขั้น */
+.stamp { position: fixed; z-index: 80; left: 50%; top: 42%; pointer-events: none; transform: translate(-50%, -50%) rotate(-7deg); color: var(--brick);
+  border: 3px solid currentColor; padding: 6px 22px; font-size: 30px; font-weight: 600; letter-spacing: .02em; background: #fff9; animation: stamp 1.3s cubic-bezier(.2,.8,.2,1) forwards; }
+.stamp.ok { color: var(--navy); }
+@keyframes stamp { 0% { opacity: 0; transform: translate(-50%,-50%) rotate(-7deg) scale(1.9); } 22% { opacity: 1; transform: translate(-50%,-50%) rotate(-7deg) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%,-50%) rotate(-7deg) scale(1); } }
+
+/* ---------- มุมมองผู้รับเหมา ---------- */
+.cards { display: grid; gap: 16px; margin-top: 18px; }
+.jc { border: 1px solid var(--line); padding: 18px 18px 20px; background: #fff; position: relative; }
+.jc.turn { border-color: var(--navy); box-shadow: inset 0 3px 0 var(--gold); }
+.jc .t { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.jc .no { font-weight: 600; font-size: 18px; }
+.jc .pj { color: var(--ink-soft); font-size: 14px; }
+.jc .head { font-size: 20px; font-weight: 400; margin: 12px 0 14px; line-height: 1.35; }
+.jc .path { margin-bottom: 4px; }
+.jc .path .l { flex: 1; }
+.jc .labels span:first-child { text-align: left; } .jc .labels span:last-child { text-align: right; }
+.jc .labels { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
+.jc .btn { margin-top: 16px; }
+.jc .late { color: var(--brick); font-weight: 500; font-size: 14px; margin-top: 8px; }
+
+.foot { margin-top: 56px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px; color: var(--ink-soft); }
+
+[hidden] { display: none !important; }
+
+/* ---------- มือถือ ---------- */
+@media (max-width: 860px) {
+  .todo li { grid-template-columns: 1fr; }
+  .todo .act { justify-self: start; }
+  .stats { grid-template-columns: 1fr 1fr; row-gap: 18px; }
+  .stat:nth-child(2) { border-right: 0; margin-right: 0; }
+  .search { margin-left: 0; width: 100%; }
+  .chips { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+  .chip { flex: none; }
+  .tools { padding-bottom: 12px; }
+  table, thead, tbody, tr, td { display: block; }
+  thead { display: none; }
+  tbody tr { padding: 14px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; }
+  td { padding: 0; border: 0; }
+  td.job { grid-column: 1; }
+  td.due { grid-column: 2; text-align: right; }
+  td.prog { grid-column: 1 / -1; min-width: 0; }
+  td.late { grid-column: 1 / -1; }
+  td.act { grid-column: 1 / -1; text-align: left; }
+  td.act .btn { width: 100%; }
+  .sheet { top: auto; left: 0; width: 100%; max-height: 92vh; transform: translateY(104%); }
+  .sheet.open { transform: none; }
+  .brand { font-size: 21px; }
+  .who .role { display: none; }
+  .nav { justify-content: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="proto" role="group" aria-label="ตัวสลับมุมมองต้นแบบ">
+  <b>ต้นแบบ</b>
+  <span>มุมมอง:</span>
+  <span class="seg">
+    <button type="button" data-role="admin" aria-pressed="true">แอดมิน</button>
+    <button type="button" data-role="contractor" aria-pressed="false">ผู้รับเหมา</button>
+  </span>
+  <small>ข้อมูลเป็นตัวอย่าง · กดปุ่ม “ขั้นถัดไป” เพื่อดูการเลื่อนสถานะและตราประทับ</small>
+</div>
+
+<header class="top">
+  <div class="top-row">
+    <span class="brand">V-TRACK<small aria-label="สำหรับทีม LH">LH</small></span>
+    <div class="who"><span class="role" id="roleLabel">แอดมิน</span><span id="today" class="num"></span></div>
+  </div>
+  <nav class="nav" aria-label="เมนูหลัก">
+    <a href="#" aria-current="page">ภาพรวม</a>
+    <a href="#" id="navAdd">เพิ่มใบงาน</a>
+    <a href="#" id="navSet">ตั้งค่าระบบ</a>
+  </nav>
+</header>
+
+<main id="app"></main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="sheet" id="sheet" aria-hidden="true" role="dialog" aria-label="รายละเอียดใบงาน"><div class="sheet-in" id="sheetIn"></div></aside>
+
+<script>
+/* ---------- ข้อมูลตัวอย่าง (สร้างอิงจากรูปแบบใบงานจริง) ---------- */
+const DAY = 86400000, NOW = Date.now();
+const iso = (off) => new Date(NOW + off * DAY).toISOString().slice(0, 10);
+const NC = 'บจ.เอ็น ซี พูล', RP = 'บจก.เรดพูล เซอร์วิส', OC = 'บจก. โอเชี่ยน พูลส์';
+const ME = OC; // ผู้รับเหมาที่ล็อกอินในมุมมองผู้รับเหมา
+
+// step: 0 รอใบเสนอราคา · 1 ตรวจสอบ · 2 อนุมัติ · 3 เปิดใบงาน · 4 รอวางบิล · 5 ได้รับวางบิล · 6 เบิกจ่ายแล้ว
+let jobs = [
+  { id: 1,  no: 'REQ-2611-813',   co: NC, pj: 'LH-410 Chaiyapruek 2',  area: 'รังสิต',   step: 1, end: iso(22),  cost: 45000,  since: 2 },
+  { id: 2,  no: 'LH-379-6900296', co: RP, pj: 'LH-379 นันทวัน พระราม 9', area: 'พระราม 9', step: 3, end: iso(-3),  cost: 108070, since: 14 },
+  { id: 3,  no: 'LH-410-6900262', co: OC, pj: 'LH-410 Chaiyapruek 2',  area: 'รังสิต',   step: 3, end: iso(9),   cost: 62500,  since: 6 },
+  { id: 4,  no: 'LH-415-6900177', co: OC, pj: 'LH-415 Villaggio ลำลูกกา', area: 'รังสิต', step: 3, end: iso(-15), cost: 88200,  since: 21 },
+  { id: 5,  no: 'LH-415-6900178', co: OC, pj: 'LH-415 Villaggio ลำลูกกา', area: 'รังสิต', step: 3, end: iso(-8),  cost: 31900,  since: 16 },
+  { id: 6,  no: 'LH-402-6900311', co: RP, pj: 'LH-402 ร่มเกล้า',       area: 'ร่มเกล้า', step: 4, end: iso(-40), cost: 54300,  since: 35 },
+  { id: 7,  no: 'LH-402-6900290', co: NC, pj: 'LH-402 ร่มเกล้า',       area: 'ร่มเกล้า', step: 4, end: iso(-14), cost: 27800,  since: 12 },
+  { id: 8,  no: 'LH-388-6900150', co: OC, pj: 'LH-388 รามอินทรา',      area: 'รามอินทรา', step: 5, end: iso(-30), cost: 73400, since: 5 },
+  { id: 9,  no: 'LH-379-6900101', co: RP, pj: 'LH-379 นันทวัน พระราม 9', area: 'พระราม 9', step: 6, end: iso(-45), cost: 3852,  since: 3 },
+  { id: 10, no: 'REQ-2611-820',   co: OC, pj: 'LH-388 รามอินทรา',      area: 'รามอินทรา', step: 0, end: iso(30),  cost: 0,      since: 1 },
+  { id: 11, no: 'LH-415-6900190', co: OC, pj: 'LH-415 Villaggio ลำลูกกา', area: 'รังสิต', step: 2, end: iso(5),   cost: 41200,  since: 3 },
+];
+
+const STAGES = [
+  { name: 'รอตรวจรับ',      color: '#B08731', of: [0, 1] },
+  { name: 'กำลังดำเนินงาน', color: '#003C71', of: [2, 3] },
+  { name: 'รอวางบิล',       color: '#6F8FB0', of: [4, 5] },
+  { name: 'เบิกจ่ายแล้ว',   color: '#1F6B4A', of: [6] },
+];
+const stageOf = (s) => STAGES.findIndex(g => g.of.includes(s));
+const STEPS = ['รอใบเสนอราคา', 'ตรวจสอบใบเสนอราคา', 'อนุมัติใบเสนอราคา', 'เปิดใบงานในระบบ', 'จบงาน รอวางบิล', 'ได้รับเอกสารวางบิล', 'ส่งเบิกจ่ายแล้ว'];
+// ขั้นถัดไปของแต่ละสถานะ (ตรงกับแอปจริง) และใครเป็นผู้ทำ
+const NEXT = [
+  { label: 'แนบใบเสนอราคา (PDF)',        stamp: 'ส่งใบเสนอราคาแล้ว', by: 'any' },
+  { label: 'ตรวจรับและเซ็นต์อนุมัติ',     stamp: 'อนุมัติแล้ว',        by: 'admin' },
+  { label: 'แนบใบงาน & เปิดงาน',         stamp: 'เปิดใบงานแล้ว',      by: 'admin' },
+  { label: 'แจ้งจบงาน (รอวางบิล)',        stamp: 'จบงาน',              by: 'admin' },
+  { label: 'ได้รับเอกสารวางบิลแล้ว',      stamp: 'รับวางบิลแล้ว',      by: 'admin' },
+  { label: 'ส่งเอกสารเบิกจ่าย',           stamp: 'ส่งเบิกจ่ายแล้ว',    by: 'admin' },
+];
+
+/* ---------- ตัวช่วย ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const baht = (n) => '฿ ' + n.toLocaleString('th-TH');
+const thDate = (iso) => new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+const daysLate = (j) => {
+  if (j.step <= 3) { const d = Math.floor((NOW - new Date(j.end).getTime()) / DAY); return d > 0 ? d : 0; }
+  if (j.step === 4 && j.since > 30) return j.since - 30;
+  return 0;
+};
+const lateKind = (j) => j.step <= 3 ? 'เลยวันจบงาน' : 'ค้างวางบิล';
+const billDeadline = (j) => { // กติกาเดียวกับแอปจริง
+  const d = new Date(NOW - j.since * DAY);
+  return d.getDate() < 10 ? new Date(d.getFullYear(), d.getMonth(), 20) : new Date(d.getFullYear(), d.getMonth() + 1, 15);
+};
+const urgencyColor = (d) => `color-mix(in srgb, var(--gold) ${Math.max(0, 100 - d * 4)}%, var(--brick))`;
+const ruler = (d) => d
+  ? `<span class="ruler" style="color:${urgencyColor(d)}"><b>${d} วัน</b><i style="width:${Math.min(d, 28) * 5}px"></i></span>`
+  : `<span class="ruler empty-r" aria-label="ไม่ล่าช้า"></span>`;
+const path = (step) => {
+  const g = stageOf(step), paid = step === 6;
+  return `<span class="path" aria-label="ขั้นที่ ${g + 1} จาก 4">` + STAGES.map((_, i) =>
+    (i ? `<span class="l ${i <= g ? 'on' : ''}"><i></i></span>` : '') +
+    `<span class="p ${i < g ? 'done' : i === g ? (paid ? 'paid' : 'on') : ''}"></span>`).join('') + `</span>`;
+};
+const stageLabel = (j) => `<div class="state">${STAGES[stageOf(j.step)].name} · <span class="num-end">${STEPS[j.step]}</span></div>`;
+
+/* ---------- สถานะ UI ---------- */
+let role = 'admin', filter = 'all', query = '', openId = null;
+const state = { counts: {} };
+
+function tween(el, to) {
+  const from = parseFloat(el.dataset.v ?? 0) || 0; el.dataset.v = to;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || from === to) { el.textContent = to; return; }
+  const t0 = performance.now();
+  (function f(t) { const k = Math.min(1, (t - t0) / 500), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = Math.round(from + (to - from) * e); if (k < 1) requestAnimationFrame(f); })(t0);
+}
+
+/* ---------- วาดหน้า ---------- */
+function render() {
+  const prev = new Map([...document.querySelectorAll('[data-flip]')].map(e => [e.dataset.flip, e.getBoundingClientRect()]));
+  $('#app').innerHTML = role === 'admin' ? adminView() : contractorView();
+  bind();
+  // เลื่อนแถวไปตำแหน่งใหม่แบบนุ่ม (FLIP)
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches)
+    document.querySelectorAll('[data-flip]').forEach(e => {
+      const p = prev.get(e.dataset.flip); if (!p) return;
+      const n = e.getBoundingClientRect(), dy = p.top - n.top;
+      if (Math.abs(dy) > 2) e.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.2,.7,.2,1)' });
+    });
+  // ตัวเลขนับขึ้น
+  document.querySelectorAll('[data-count]').forEach(el => tween(el, +el.dataset.count));
+  if (openId) fillSheet(openId, true);
+}
+
+function adminView() {
+  const all = jobs;
+  const total = all.length;
+  const counts = STAGES.map((g, i) => all.filter(j => stageOf(j.step) === i).length);
+  const late = all.filter(j => daysLate(j) > 0);
+  const paid = all.filter(j => j.step === 6).reduce((s, j) => s + j.cost, 0);
+  const sum = all.reduce((s, j) => s + j.cost, 0);
+  const todo = [...late].sort((a, b) => daysLate(b) - daysLate(a)).slice(0, 5);
+  const pending = all.filter(j => j.step === 1);
+
+  const list = all.filter(j =>
+    (filter === 'all' || (filter === 'late' ? daysLate(j) > 0 : stageOf(j.step) === +filter)) &&
+    (!query || (j.no + j.co + j.pj + j.area).toLowerCase().includes(query.toLowerCase())))
+    .sort((a, b) => daysLate(b) - daysLate(a) || a.step - b.step);
+
+  const chip = (id, name, n) => `<button class="chip" type="button" data-filter="${id}" aria-pressed="${filter === String(id)}">${name} <span class="n num">${n}</span></button>`;
+
+  return `
+  <h1>ติดตามงานซ่อม</h1><div class="rule"></div>
+  <p class="lede">งวดพฤศจิกายน 2569 · ${total} ใบงาน · เรียงตามสิ่งที่ต้องทำก่อน</p>
+
+  <section aria-labelledby="h-todo">
+    <div class="sec-head"><h2 id="h-todo">ต้องจัดการวันนี้</h2><span class="aside num">${todo.length + pending.length} รายการ</span></div>
+    ${todo.length + pending.length ? `<ul class="todo">` +
+      pending.map(j => `<li data-flip="t${j.id}"><span class="ruler empty-r"></span>
+        <div class="meta"><div class="jobno">${j.no}</div><div class="why soft">ใบเสนอราคารอตรวจรับ ส่งมา ${j.since} วันที่แล้ว</div><div class="sub">${j.co} · ${j.pj}</div></div>
+        <button class="btn sm act" data-adv="${j.id}">${NEXT[j.step].label}</button></li>`).join('') +
+      todo.map(j => `<li data-flip="t${j.id}">${ruler(daysLate(j))}
+        <div class="meta"><div class="jobno">${j.no}</div><div class="why">${lateKind(j)} ${daysLate(j)} วัน</div><div class="sub">${j.co} · ${j.pj}</div></div>
+        <button class="btn sm act" data-adv="${j.id}">${NEXT[j.step].label}</button></li>`).join('') + `</ul>`
+      : `<p class="empty">ไม่มีงานค้าง ทุกใบงานเป็นไปตามกำหนด</p>`}
+  </section>
+
+  <section aria-labelledby="h-ov">
+    <div class="sec-head"><h2 id="h-ov">ภาพรวมงวด</h2><span class="aside">กดชื่อขั้นเพื่อกรองรายการด้านล่าง</span></div>
+    <div class="overview">
+      <div class="bar" role="img" aria-label="สัดส่วนสถานะ ${STAGES.map((g, i) => g.name + ' ' + counts[i]).join(', ')}">
+        ${STAGES.map((g, i) => `<span style="width:${counts[i] / total * 100}%;background:${g.color}"></span>`).join('')}
+      </div>
+      <div class="stats">
+        ${STAGES.map((g, i) => `<button class="stat" type="button" data-filter="${i}" style="text-align:left;background:none;border-top:0;border-left:0;border-bottom:0;font:inherit">
+          <div class="k"><i style="background:${g.color}"></i>${g.name}</div><div class="v num" data-count="${counts[i]}">${counts[i]}</div></button>`).join('')}
+      </div>
+      <div class="money"><span>เบิกจ่ายแล้ว <strong class="num">${baht(paid)}</strong> จากมูลค่างวด <strong class="num">${baht(sum)}</strong></span>
+        <span class="track"><i style="width:${sum ? paid / sum * 100 : 0}%"></i></span></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-all">
+    <div class="sec-head"><h2 id="h-all">ใบงานทั้งหมด</h2><span class="aside num">${list.length} รายการ</span></div>
+    <div class="tools">
+      <div class="chips">${chip('all', 'ทั้งหมด', total)}${late.length ? chip('late', 'เลยกำหนด', late.length) : ''}${STAGES.map((g, i) => chip(i, g.name, counts[i])).join('')}</div>
+      <input class="search" type="search" placeholder="ค้นหาเลขใบงาน ร้านค้า พื้นที่" value="${query}" aria-label="ค้นหา">
+    </div>
+    ${list.length ? `<table><thead><tr><th>ใบงาน</th><th>ความคืบหน้า</th><th>กำหนดจบ</th><th>ความล่าช้า</th><th></th></tr></thead><tbody>
+      ${list.map(j => { const n = NEXT[j.step]; return `<tr tabindex="0" data-open="${j.id}" data-flip="r${j.id}">
+        <td class="job"><div class="no">${j.no}</div><div class="co">${j.co} · ${j.pj}</div></td>
+        <td class="prog">${path(j.step)}${stageLabel(j)}</td>
+        <td class="due num">${thDate(j.end)}</td>
+        <td class="late">${ruler(daysLate(j))}</td>
+        <td class="act">${n ? `<button class="btn ghost sm" data-adv="${j.id}">${n.label}</button>` : `<span class="num-end">เสร็จสิ้น</span>`}</td></tr>`; }).join('')}
+      </tbody></table>` : `<p class="empty">ไม่พบใบงานตามเงื่อนไข</p>`}
+  </section>
+  <p class="foot">ต้นแบบเพื่อดูทิศทางการออกแบบ ยังไม่เชื่อมฐานข้อมูลจริง</p>`;
+}
+
+function contractorView() {
+  const mine = jobs.filter(j => j.co === ME).sort((a, b) => (b.step === 0 || b.step === 4) - (a.step === 0 || a.step === 4) || daysLate(b) - daysLate(a));
+  const turn = mine.filter(j => j.step === 0).length;
+  const head = (j) => ({
+    0: 'ถึงคิวคุณ: แนบใบเสนอราคา',
+    1: 'รอเจ้าหน้าที่ตรวจรับใบเสนอราคา',
+    2: 'อนุมัติแล้ว รอเจ้าหน้าที่เปิดใบงาน',
+    3: `กำลังดำเนินงาน กำหนดจบ ${thDate(j.end)}`,
+    4: `ส่งเอกสารวางบิลภายใน ${thDate(billDeadline(j))}`,
+    5: 'ได้รับเอกสารวางบิลแล้ว รอเบิกจ่าย',
+    6: 'เบิกจ่ายเรียบร้อยแล้ว',
+  })[j.step];
+  return `
+  <h1>งานของ ${ME}</h1><div class="rule"></div>
+  <p class="lede">${turn ? `มี ${turn} ใบงานที่รอให้คุณดำเนินการ` : 'ไม่มีงานที่รอให้คุณดำเนินการ'} · รวม ${mine.length} ใบงานในงวดนี้</p>
+  <div class="cards">
+  ${mine.map(j => { const mineTurn = j.step === 0, d = daysLate(j); return `
+    <article class="jc ${mineTurn || j.step === 4 ? 'turn' : ''}" data-flip="c${j.id}" ${mineTurn ? '' : `data-open="${j.id}" tabindex="0"`}>
+      <div class="t"><span class="no">${j.no}</span><span class="pj">${j.pj} · ${j.area}</span></div>
+      <p class="head">${head(j)}</p>
+      ${path(j.step)}
+      <div class="labels">${STAGES.map(g => `<span>${g.name}</span>`).join('')}</div>
+      ${d && j.step <= 3 ? `<p class="late">เลยกำหนดจบงาน ${d} วัน</p>` : ''}
+      ${mineTurn ? `<button class="btn wide" data-adv="${j.id}">${NEXT[0].label}</button>` : ''}
+    </article>`; }).join('')}
+  </div>
+  <p class="foot">ต้นแบบเพื่อดูทิศทางการออกแบบ ยังไม่เชื่อมฐานข้อมูลจริง</p>`;
+}
+
+/* ---------- ลิ้นชักรายละเอียด ---------- */
+function fillSheet(id, keep) {
+  const j = jobs.find(x => x.id === id); if (!j) return;
+  const n = NEXT[j.step], can = n && (n.by === 'any' || role === 'admin'), d = daysLate(j);
+  $('#sheetIn').innerHTML = `
+    <button class="close" aria-label="ปิด">×</button>
+    <h3 class="num">${j.no}</h3>
+    <dl class="tblock">
+      <div><dt>โครงการ</dt><dd>${j.pj}</dd></div>
+      <div><dt>ผู้รับเหมา</dt><dd>${j.co}</dd></div>
+      <div><dt>พื้นที่</dt><dd>${j.area}</dd></div>
+      <div><dt>กำหนดจบงาน</dt><dd class="num">${thDate(j.end)}${d ? ` <span style="color:var(--brick)">· ${lateKind(j)} ${d} วัน</span>` : ''}</dd></div>
+      <div><dt>มูลค่า</dt><dd class="num">${j.cost ? baht(j.cost) : 'ยังไม่ระบุ'}</dd></div>
+    </dl>
+    <ol class="steps">${STEPS.map((s, i) => `<li class="${i < j.step ? 'done' : i === j.step ? 'now' : ''}">${s}</li>`).join('')}</ol>
+    <div class="next">
+      ${n ? (can ? `<button class="btn wide" data-adv="${j.id}">${n.label}</button>`
+                 : `<p class="hint">ขั้นถัดไป: ${n.label} (โดยเจ้าหน้าที่)</p>`)
+          : `<p class="hint">ใบงานนี้ดำเนินการครบทุกขั้นแล้ว</p>`}
+      ${j.step === 4 ? `<p class="hint">ส่งเอกสารวางบิลภายใน ${thDate(billDeadline(j))}</p>` : ''}
+    </div>
+    ${role === 'admin' ? `<div class="more"><button class="btn ghost sm">จัดการเพิ่มเติม</button><button class="link">ยกเลิกใบงาน</button></div>` : ''}`;
+  document.querySelectorAll('#sheetIn [data-adv]').forEach(b => b.addEventListener('click', () => advance(+b.dataset.adv)));
+  if (!keep) { $('#sheet').classList.add('open'); $('#scrim').classList.add('open'); $('#sheet').setAttribute('aria-hidden', 'false'); $('.close').focus(); }
+  openId = id;
+}
+function closeSheet() { openId = null; $('#sheet').classList.remove('open'); $('#scrim').classList.remove('open'); $('#sheet').setAttribute('aria-hidden', 'true'); }
+
+/* ---------- เลื่อนขั้นพร้อมตราประทับ ---------- */
+function advance(id) {
+  const j = jobs.find(x => x.id === id); if (!j || !NEXT[j.step]) return;
+  const st = NEXT[j.step].stamp;
+  j.step += 1; j.since = 0;
+  const s = document.createElement('div'); s.className = 'stamp ok'; s.textContent = st; document.body.appendChild(s);
+  setTimeout(() => s.remove(), 1400);
+  render();
+}
+
+function bind() {
+  document.querySelectorAll('[data-adv]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); advance(+b.dataset.adv); }));
+  document.querySelectorAll('[data-open]').forEach(r => {
+    r.addEventListener('click', () => fillSheet(+r.dataset.open));
+    r.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fillSheet(+r.dataset.open); } });
+  });
+  document.querySelectorAll('[data-filter]').forEach(b => b.addEventListener('click', () => { filter = String(b.dataset.filter); render(); $('#h-all')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
+  const s = $('.search'); if (s) s.addEventListener('input', e => { query = e.target.value; const pos = e.target.selectionStart; render(); const n = $('.search'); n.focus(); n.setSelectionRange(pos, pos); });
+}
+
+document.addEventListener('click', e => { if (e.target.closest('.close') || e.target.id === 'scrim') closeSheet(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+document.querySelectorAll('.proto [data-role]').forEach(b => b.addEventListener('click', () => {
+  role = b.dataset.role; closeSheet();
+  document.querySelectorAll('.proto [data-role]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  $('#roleLabel').textContent = role === 'admin' ? 'แอดมิน' : ME;
+  $('#navAdd').hidden = $('#navSet').hidden = role !== 'admin';
+  filter = 'all'; query = ''; render();
+}));
+$('#today').textContent = new Date().toLocaleDateString('th-TH', { dateStyle: 'long' });
+render();
+</script>
+</body>
+</html>

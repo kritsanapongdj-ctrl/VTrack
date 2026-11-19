@@ -1460,18 +1460,30 @@ function MobileNavItem({ id, icon: Icon, label, active, set }) {
 function AdminPasscodeModal({ isOpen, onClose, onSuccess, title = "กรุณากรอกรหัสผ่านผู้ดูแลเพื่อดำเนินการ" }) {
   const [pin, setPin] = useState('');
   const [err, setErr] = useState('');
+  const [checking, setChecking] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (pin === '1312') {
-      setErr('');
+    setChecking(true);
+    try {
+      const res = await fetch('/api/admin-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      });
+      if (res.ok) {
+        setErr('');
+        onSuccess();
+      } else {
+        setErr(res.status === 401 ? 'รหัสผ่านไม่ถูกต้อง' : 'ระบบตรวจรหัสยังไม่พร้อมใช้งาน');
+      }
+    } catch {
+      setErr('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่');
+    } finally {
       setPin('');
-      onSuccess();
-    } else {
-      setErr('รหัสผ่านไม่ถูกต้อง');
-      setPin('');
+      setChecking(false);
     }
   };
 
@@ -1487,7 +1499,7 @@ function AdminPasscodeModal({ isOpen, onClose, onSuccess, title = "กรุณ�
             type="password" 
             value={pin} 
             onChange={e => setPin(e.target.value)} 
-            maxLength={4} 
+            maxLength={32} 
             placeholder="••••" 
             className="w-full text-center text-3xl tracking-[0.5em] p-3.5 bg-gray-50 rounded-2xl border-2 border-black focus:ring-2 focus:ring-[#FFD93D]" 
             autoFocus 
@@ -1495,7 +1507,7 @@ function AdminPasscodeModal({ isOpen, onClose, onSuccess, title = "กรุณ�
           {err && <p className="text-xs text-red-500 font-bold">{err}</p>}
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-gray-100 text-gray-600 hover:bg-gray-200">ยกเลิก</button>
-            <button type="submit" className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-black text-white hover:bg-[#333]">ยืนยันรหัส</button>
+            <button type="submit" disabled={checking || !pin} className="flex-1 py-3.5 rounded-xl font-bold text-xs bg-black text-white hover:bg-[#333] disabled:opacity-50">{checking ? 'กำลังตรวจสอบ...' : 'ยืนยันรหัส'}</button>
           </div>
         </form>
       </div>

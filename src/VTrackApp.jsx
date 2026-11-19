@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, FileText, Settings, PlusCircle, 
   Upload, Search, Edit, Trash2, X, AlertCircle, Menu, ChevronLeft, ChevronRight, 
-  User, CalendarDays, FileDown, Printer, Trash, MapPin, Building2, Briefcase,
+  User, CalendarDays, FileDown, Printer, Trash, Briefcase,
   Paperclip, PenTool, CheckCircle2, Clock, AlertTriangle, ArrowRight, Download,
   Lock, Unlock, HardDrive, History, Eye, RotateCcw, ShieldCheck, DollarSign, Sparkles, Loader2, Image as ImageIcon,
   Mail, Send, Copy, Check
@@ -668,6 +668,16 @@ function CompanyRow({ name, emails, onAddEmails, onRemoveEmail, onDelete }) {
   );
 }
 
+const moveStatus = (task, newStatus, onSave) => {
+  const timeline = appendTimelineEvent(task.timeline, {
+    type: 'status_change',
+    from: task.status,
+    to: newStatus,
+    note: `เปลี่ยนสถานะเป็น ${newStatus}`
+  });
+  onSave({ ...task, status: newStatus, timeline }, true, task.id);
+};
+
 function InlineStatusSelect({ task, onSave, onRequestCancel, onRequestDisbursement }) {
   const s = STATUSES.find(x => x.name === task.status);
   
@@ -684,13 +694,7 @@ function InlineStatusSelect({ task, onSave, onRequestCancel, onRequestDisburseme
         return;
       }
     }
-    const updatedTimeline = appendTimelineEvent(task.timeline, {
-      type: 'status_change',
-      from: task.status,
-      to: newStatus,
-      note: `เปลี่ยนสถานะเป็น ${newStatus}`
-    });
-    onSave({ ...task, status: newStatus, timeline: updatedTimeline }, true, task.id);
+    moveStatus(task, newStatus, onSave);
   };
   
   return (
@@ -1285,12 +1289,6 @@ export default function App() {
                     tasks={tasks} 
                     settings={settings} 
                     onViewDetail={(t) => setViewDetailTask(t)}
-                    onOpenReschedule={(t) => setRescheduleModalTask(t)}
-                    isUnlocked={isUnlocked}
-                    onSave={saveTask}
-                    onEdit={(t) => setEditTask(t)}
-                    onRequestCancel={(t) => setCancelModalTask(t)}
-                    onRequestDisbursement={(t) => setDisbursementModalTask(t)}
                   />
                 )}
                 {activeTab === 'add' && isUnlocked && (
@@ -1346,6 +1344,8 @@ export default function App() {
               onRequestDownload={handleRequestDownload}
               onPreviewPdf={handlePreviewPdf}
               onRequestDisbursement={(t) => setDisbursementModalTask(t)}
+              onSave={saveTask}
+              onEdit={(t) => { setViewDetailTask(null); setEditTask(t); }}
               isUnlocked={isUnlocked}
             />
           </div>
@@ -2571,6 +2571,8 @@ function TaskDetailView({
   onRequestDownload,
   onPreviewPdf,
   onRequestDisbursement,
+  onSave,
+  onEdit,
   isUnlocked
 }) {
   const [activeSubTab, setActiveSubTab] = useState('info'); // 'info' | 'timeline'
@@ -2586,6 +2588,40 @@ function TaskDetailView({
 
   const tabCls = (on) => `px-4 min-h-12 text-sm font-extrabold border-2 border-black ${on ? 'bg-black text-white' : 'bg-white text-black hover:bg-yellow-200'}`;
   const actionCls = 'brut-btn px-4 min-h-12 text-sm font-extrabold flex items-center gap-2';
+  const primaryCls = 'brut-btn w-full min-h-14 px-5 bg-[#FFD93D] text-base font-extrabold flex items-center justify-center gap-2';
+
+  const pickQuote = async (e) => {
+    const picked = e.target.files && e.target.files[0];
+    if (!picked) return;
+    e.target.value = '';
+    setIsUploadingQuote(true);
+    try {
+      await onUploadQuote(task, picked);
+    } finally {
+      setIsUploadingQuote(false);
+    }
+  };
+  const uploadBtn = (cls, text) => (
+    <label className={`${cls} cursor-pointer ${isUploadingQuote ? 'opacity-70 pointer-events-none' : ''}`}>
+      {isUploadingQuote ? <Loader2 size={18} className="animate-spin" /> : <Paperclip size={18}/>}
+      <span>{isUploadingQuote ? 'กำลังอัปโหลด...' : text}</span>
+      <input type="file" accept=".pdf,application/pdf" className="hidden" disabled={isUploadingQuote} onChange={pickQuote} />
+    </label>
+  );
+
+  // ขั้นถัดไปของแต่ละสถานะ: ปุ่มหลักปุ่มเดียว ที่เหลือซ่อนใน "จัดการเพิ่มเติม"
+  const quoteLabel = hasQuote ? 'แนบใบเสนอราคาใหม่' : 'แนบใบเสนอราคา (PDF)';
+  const STEPS = {
+    'รอใบเสนอราคา': { key: 'upload' },
+    'อยู่ระหว่างตรวจสอบใบเสนอราคา': { key: 'sign', label: 'ตรวจรับและเซ็นต์อนุมัติ', icon: PenTool, run: () => onOpenSign(task) },
+    'อนุมัติใบเสนอราคาแล้ว': { key: 'order', label: 'แนบใบงานแจ้งซ่อม & เปิดงาน', icon: FileText, run: () => onOpenTaskOrder(task) },
+    'เปิดใบงานในระบบแล้ว': { key: 'finish', label: 'แจ้งจบงาน (รอวางบิล)', icon: CheckCircle2, run: () => moveStatus(task, BILL_WAIT_STATUS, onSave) },
+    [BILL_WAIT_STATUS]: { key: 'bill', label: 'ได้รับเอกสารวางบิลแล้ว', icon: CheckCircle2, run: () => moveStatus(task, 'ได้รับเอกสารวางบิลแล้ว', onSave) },
+    'ได้รับเอกสารวางบิลแล้ว': { key: 'pay', label: 'ส่งเอกสารเบิกจ่าย (ระบุวัน)', icon: DollarSign, run: () => onRequestDisbursement(task) },
+  };
+  let step = STEPS[task.status];
+  if (step?.key === 'sign' && !hasQuote) step = STEPS['รอใบเสนอราคา']; // ไม่มีไฟล์ให้เซ็น ต้องแนบก่อน
+  const billDeadline = task.status === BILL_WAIT_STATUS ? getBillingDeadline(task) : null;
 
   return (
     <div className="brut-panel bg-[#FFFBEB] p-5 md:p-8 space-y-6 w-full max-w-3xl mx-auto text-left max-h-[90vh] overflow-y-auto custom-scrollbar text-black">
@@ -2623,6 +2659,70 @@ function TaskDetailView({
 
       {activeSubTab === 'info' && (
         <div className="space-y-6">
+          {/* ขั้นถัดไป */}
+          <div className="space-y-3">
+            {billDeadline && (
+              <p className="border-2 border-dashed border-black p-3 text-sm font-bold">
+                ส่งเอกสารวางบิลภายใน <span className="num">{billDeadline.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+              </p>
+            )}
+            {step?.key === 'upload' && uploadBtn(primaryCls, quoteLabel)}
+            {step && step.key !== 'upload' && (isUnlocked ? (
+              <button onClick={step.run} className={primaryCls}>
+                <step.icon size={20}/>
+                <span>{step.label}</span>
+              </button>
+            ) : (
+              <p className="border-2 border-dashed border-black p-3 text-sm font-bold">ขั้นถัดไป: {step.label} (โดยเจ้าหน้าที่)</p>
+            ))}
+
+            <details className="group">
+              <summary className="brut-btn min-h-12 px-4 bg-white text-sm font-extrabold flex items-center justify-between cursor-pointer list-none">
+                จัดการเพิ่มเติม
+                <ChevronRight size={18} className="transition-transform group-open:rotate-90" />
+              </summary>
+              <div className="flex flex-wrap items-center gap-3 pt-3">
+                {step?.key !== 'upload' && uploadBtn(`${actionCls} bg-white`, quoteLabel)}
+                {isUnlocked && (
+                  <>
+                    {hasQuote && step?.key !== 'sign' && (
+                      <button onClick={() => onOpenSign(task)} className={`${actionCls} bg-white`}>
+                        <PenTool size={16}/>
+                        <span>{hasSigned ? 'เซ็นต์อนุมัติใหม่อีกครั้ง' : 'ตรวจรับและเซ็นต์อนุมัติ'}</span>
+                      </button>
+                    )}
+                    {step?.key !== 'order' && (
+                      <button onClick={() => onOpenTaskOrder(task)} className={`${actionCls} bg-white`}>
+                        <FileText size={16}/>
+                        <span>{hasTaskFile ? 'แนบใบงานแจ้งซ่อมใหม่' : 'แนบใบงานแจ้งซ่อม & เปิดงาน'}</span>
+                      </button>
+                    )}
+                    {(task.startDate || task.endDate || task.aptDate) && (
+                      <button onClick={() => onOpenReschedule(task)} className={`${actionCls} bg-white`}>
+                        <CalendarDays size={16}/>
+                        <span>ขอเลื่อนกำหนดงาน</span>
+                      </button>
+                    )}
+                    {step?.key !== 'pay' && task.status === 'ส่งเอกสารเบิกจ่ายแล้ว' && (
+                      <button onClick={() => onRequestDisbursement(task)} className={`${actionCls} bg-white`}>
+                        <DollarSign size={16}/>
+                        <span>แก้ไขวันทำจ่าย</span>
+                      </button>
+                    )}
+                    <button onClick={() => onEdit(task)} className={`${actionCls} bg-white`}>
+                      <Edit size={16}/>
+                      <span>แก้ไขข้อมูลใบงาน</span>
+                    </button>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <span className="text-sm font-extrabold">เปลี่ยนสถานะเอง:</span>
+                      <InlineStatusSelect task={task} onSave={onSave} onRequestCancel={onRequestCancel} onRequestDisbursement={onRequestDisbursement} />
+                    </div>
+                  </>
+                )}
+              </div>
+            </details>
+          </div>
+
           {/* Hero: วันทำจ่าย & วันนัดหมาย */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="brut bg-[#B8F2C9] p-4 flex flex-col justify-between">
@@ -2674,65 +2774,6 @@ function TaskDetailView({
                 <span className="text-sm font-black truncate">{task.area || '-'}</span>
               </div>
             </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex flex-wrap gap-3">
-            <label className={`${actionCls} bg-[#FFD93D] cursor-pointer ${isUploadingQuote ? 'opacity-70 pointer-events-none' : ''}`}>
-              {isUploadingQuote ? <Loader2 size={16} className="animate-spin" /> : <Paperclip size={16}/>}
-              <span>{isUploadingQuote ? 'กำลังอัปโหลด...' : (hasQuote ? 'แนบใบเสนอราคาใหม่' : 'แนบใบเสนอราคา (PDF)')}</span>
-              <input 
-                type="file" 
-                accept=".pdf,application/pdf" 
-                className="hidden" 
-                disabled={isUploadingQuote}
-                onChange={async e => { 
-                  if (e.target.files && e.target.files[0]) {
-                    const picked = e.target.files[0];
-                    e.target.value = '';
-                    setIsUploadingQuote(true);
-                    try {
-                      await onUploadQuote(task, picked);
-                    } finally {
-                      setIsUploadingQuote(false);
-                    }
-                  }
-                }} 
-              />
-            </label>
-
-            {isUnlocked && (
-              <>
-                {hasQuote && (
-                  <button onClick={() => onOpenSign(task)} className={`${actionCls} bg-[#C4B5FD]`}>
-                    <PenTool size={16}/>
-                    <span>{hasSigned ? 'เซ็นต์อนุมัติใหม่อีกครั้ง' : 'ตรวจรับและเซ็นต์อนุมัติ'}</span>
-                  </button>
-                )}
-                <button onClick={() => onOpenTaskOrder(task)} className={`${actionCls} bg-[#BDE3FF]`}>
-                  <FileText size={16}/>
-                  <span>{hasTaskFile ? 'แนบใบงานแจ้งซ่อมใหม่' : 'แนบใบงานแจ้งซ่อม & เปิดงาน'}</span>
-                </button>
-                {(task.startDate || task.endDate || task.aptDate) && (
-                  <button onClick={() => onOpenReschedule(task)} className={`${actionCls} bg-white`}>
-                    <CalendarDays size={16}/>
-                    <span>ขอเลื่อนกำหนดงาน</span>
-                  </button>
-                )}
-                {onRequestDisbursement && (
-                  <button onClick={() => onRequestDisbursement(task)} className={`${actionCls} bg-[#B8F2C9]`}>
-                    <DollarSign size={16}/>
-                    <span>{task.status === 'ส่งเอกสารเบิกจ่ายแล้ว' ? 'แก้ไขวันทำจ่าย' : 'ส่งเอกสารเบิกจ่าย (ระบุวัน)'}</span>
-                  </button>
-                )}
-                {task.status !== 'ยกเลิก' && (
-                  <button onClick={() => onRequestCancel(task)} className={`${actionCls} bg-[#FF5C5C] sm:ml-auto`}>
-                    <Trash2 size={16}/>
-                    <span>ยกเลิกใบงาน</span>
-                  </button>
-                )}
-              </>
-            )}
           </div>
 
           {task.cancelReason && (
@@ -2788,7 +2829,12 @@ function TaskDetailView({
         </div>
       )}
 
-      <div className="flex justify-end pt-4 border-t-4 border-black">
+      <div className="flex items-center justify-between gap-3 pt-4 border-t-4 border-black">
+        {isUnlocked && task.status !== 'ยกเลิก' ? (
+          <button onClick={() => onRequestCancel(task)} className="min-h-12 px-3 text-sm font-extrabold underline text-red-800 flex items-center gap-1.5">
+            <Trash2 size={16}/> ยกเลิกใบงาน
+          </button>
+        ) : <span />}
         <button onClick={onClose} className="brut-btn px-8 min-h-12 bg-white text-sm font-extrabold">
           ปิดหน้าต่าง
         </button>
@@ -2937,7 +2983,15 @@ function PrintReport({ tasks, printData, onDone }) {
 
 // -------------------------------------------------------------
 
-function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked, onSave, onEdit, onRequestCancel, onRequestDisbursement }) {
+// 8 สถานะย่อเหลือ 4 ขั้นสำหรับดูภาพรวมและกรอง (ยกเลิกไม่แสดงบนหน้ากระดาน)
+const STAGES = [
+  { id: 'review', name: 'รอตรวจรับ', color: '#FFD93D', statuses: ['รอใบเสนอราคา', 'อยู่ระหว่างตรวจสอบใบเสนอราคา'] },
+  { id: 'work', name: 'กำลังดำเนินงาน', color: '#BDE3FF', statuses: ['อนุมัติใบเสนอราคาแล้ว', 'เปิดใบงานในระบบแล้ว'] },
+  { id: 'bill', name: 'รอวางบิล', color: '#FFB4A2', statuses: ['จบงานและรอรับเอกสารวางบิล', 'ได้รับเอกสารวางบิลแล้ว'] },
+  { id: 'paid', name: 'เบิกจ่ายแล้ว', color: '#B8F2C9', statuses: ['ส่งเอกสารเบิกจ่ายแล้ว'] },
+];
+
+function Dashboard({ tasks, settings, onViewDetail }) {
   const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
 
   const availableMonths = useMemo(() => {
@@ -2958,72 +3012,41 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
 
   const [filterProj, setFilterProj] = useState('');
   const [filterComp, setFilterComp] = useState('');
-  const [quickFilter, setQuickFilter] = useState('all');
+  const [quickFilter, setQuickFilter] = useState('all'); // 'all' | 'overdue' | STAGES[].id
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 1. Base filter by month, project, and company
   const baseFilteredTasks = useMemo(() => {
     return tasks.filter(t => {
       const tMonth = getEffectiveMonth(t);
-      return !t.isDeleted && tMonth === selectedMonth && 
-        (filterProj ? t.project === filterProj : true) && 
+      return !t.isDeleted && tMonth === selectedMonth &&
+        (filterProj ? t.project === filterProj : true) &&
         (filterComp ? t.company === filterComp : true);
     });
   }, [tasks, selectedMonth, filterProj, filterComp]);
 
-  // 2. Secondary filter by quick status pill & search term
   const finalFilteredTasks = useMemo(() => {
     return baseFilteredTasks.filter(t => {
-      // Quick filter logic
-      if (quickFilter === 'pending') {
-        const isPending = t.status === 'รอใบเสนอราคา' || t.status === 'อยู่ระหว่างตรวจสอบใบเสนอราคา';
-        if (!isPending) return false;
-      } else if (quickFilter === 'signed') {
-        if (!isSigned(t)) return false;
-      } else if (quickFilter === 'tobill') {
-        const isToBill = t.status === 'จบงานและรอรับเอกสารวางบิล' || t.status === 'ได้รับเอกสารวางบิลแล้ว';
-        if (!isToBill) return false;
-      } else if (quickFilter === 'disbursed') {
-        if (t.status !== 'ส่งเอกสารเบิกจ่ายแล้ว') return false;
-      } else if (quickFilter === 'overdue') {
+      if (quickFilter === 'overdue') {
         if (!isOverdue(t) && !isScheduleOverdue(t)) return false;
+      } else if (quickFilter !== 'all') {
+        const stage = STAGES.find(s => s.id === quickFilter);
+        if (stage && !stage.statuses.includes(t.status)) return false;
       }
 
-      // Keyword search
       if (searchTerm.trim()) {
         const term = searchTerm.toLowerCase();
-        const matchTask = t.taskNo && t.taskNo.toLowerCase().includes(term);
-        const matchComp = t.company && t.company.toLowerCase().includes(term);
-        const matchProj = t.project && t.project.toLowerCase().includes(term);
-        const matchArea = t.area && t.area.toLowerCase().includes(term);
-        return matchTask || matchComp || matchProj || matchArea;
+        return [t.taskNo, t.company, t.project, t.area].some(v => v && v.toLowerCase().includes(term));
       }
-
       return true;
     });
   }, [baseFilteredTasks, quickFilter, searchTerm]);
 
-  // Executive KPI Aggregations
   const totalTasksCount = baseFilteredTasks.length;
-  const pendingQuotesCount = useMemo(() => {
-    return baseFilteredTasks.filter(t => t.status === 'รอใบเสนอราคา' || t.status === 'อยู่ระหว่างตรวจสอบใบเสนอราคา').length;
-  }, [baseFilteredTasks]);
-
-  const signedQuotesCount = useMemo(() => {
-    return baseFilteredTasks.filter(isSigned).length;
-  }, [baseFilteredTasks]);
-
-  const disbursedCount = useMemo(() => {
-    return baseFilteredTasks.filter(t => t.status === 'ส่งเอกสารเบิกจ่ายแล้ว').length;
-  }, [baseFilteredTasks]);
-
-  const overdueCount = useMemo(() => {
-    return baseFilteredTasks.filter(t => isOverdue(t) || isScheduleOverdue(t)).length;
-  }, [baseFilteredTasks]);
-
-  const toBillCount = useMemo(() => {
-    return baseFilteredTasks.filter(t => t.status === 'จบงานและรอรับเอกสารวางบิล' || t.status === 'ได้รับเอกสารวางบิลแล้ว').length;
-  }, [baseFilteredTasks]);
+  const stageCounts = STAGES.map(s => ({ ...s, count: baseFilteredTasks.filter(t => s.statuses.includes(t.status)).length }));
+  const pendingQuotesCount = stageCounts[0].count;
+  const disbursedCount = stageCounts[3].count;
+  const signedQuotesCount = useMemo(() => baseFilteredTasks.filter(isSigned).length, [baseFilteredTasks]);
+  const overdueCount = useMemo(() => baseFilteredTasks.filter(t => isOverdue(t) || isScheduleOverdue(t)).length, [baseFilteredTasks]);
 
   const { totalMonthBudget, disbursedBudget } = useMemo(() => {
     let total = 0, disbursed = 0;
@@ -3036,23 +3059,6 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
     return { totalMonthBudget: total, disbursedBudget: disbursed };
   }, [baseFilteredTasks]);
 
-  // Status statistics for Donut chart and spec matrix
-  const stats = STATUSES.map(s => {
-    const count = baseFilteredTasks.filter(t => t.status === s.name).length;
-    const percent = baseFilteredTasks.length > 0 ? Math.round((count / baseFilteredTasks.length) * 100) : 0;
-    return { ...s, count, percent };
-  });
-
-  let cumulativePercent = 0;
-  const conicStops = stats.filter(s => s.count > 0).map(s => {
-    const start = cumulativePercent;
-    const slicePercent = (s.count / baseFilteredTasks.length) * 100;
-    cumulativePercent += slicePercent;
-    return `${s.color} ${start}% ${cumulativePercent}%`;
-  }).join(', ');
-  
-  const pieStyle = baseFilteredTasks.length > 0 ? { background: `conic-gradient(${conicStops})` } : { background: '#F0ECE1' };
-
   const selectedMonthFormatted = useMemo(() => {
     try {
       return new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric' }).format(new Date(selectedMonth));
@@ -3060,14 +3066,6 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
       return selectedMonth;
     }
   }, [selectedMonth]);
-
-  const todayThaiFormatted = useMemo(() => {
-    try {
-      return new Intl.DateTimeFormat('th-TH', { dateStyle: 'full' }).format(new Date());
-    } catch {
-      return '';
-    }
-  }, []);
 
   const hasFilter = filterProj || filterComp || quickFilter !== 'all' || searchTerm;
   const clearFilters = () => {
@@ -3077,12 +3075,9 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
     setSearchTerm('');
   };
   const pills = [
-    ['all', 'ทั้งหมด', totalTasksCount],
-    ...(overdueCount > 0 ? [['overdue', 'เลยกำหนด', overdueCount]] : []),
-    ['pending', 'รอตรวจรับ', pendingQuotesCount],
-    ['signed', 'เซ็นต์อนุมัติแล้ว', signedQuotesCount],
-    ['tobill', 'รอวางบิล', toBillCount],
-    ['disbursed', 'เบิกจ่ายแล้ว', disbursedCount],
+    { id: 'all', name: 'ทั้งหมด', count: totalTasksCount },
+    ...(overdueCount > 0 ? [{ id: 'overdue', name: 'เลยกำหนด', count: overdueCount }] : []),
+    ...stageCounts,
   ];
   const fmt = (n) => n.toLocaleString('th-TH', { maximumFractionDigits: 2 });
 
@@ -3112,7 +3107,7 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filters + สัดส่วนสถานะ */}
       <div className="brut p-3 md:p-5 space-y-3">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <label className="block space-y-1">
@@ -3159,194 +3154,95 @@ function Dashboard({ tasks, settings, onViewDetail, onOpenReschedule, isUnlocked
           </label>
         </div>
 
-        <div className="flex items-center gap-2 border-t-2 border-black pt-3">
-          <div className="flex flex-1 gap-2 overflow-x-auto lg:flex-wrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {pills.map(([id, label, count]) => {
-              const on = quickFilter === id;
-              const tone = on ? 'bg-black text-white' : id === 'overdue' ? 'bg-[#FF5C5C] hover:bg-[#ff7a7a]' : 'bg-white hover:bg-[#FFD93D]';
-              return (
-                <button
-                  key={id}
-                  onClick={() => setQuickFilter(id)}
-                  aria-pressed={on}
-                  className={`shrink-0 min-h-12 px-4 border-2 border-black text-sm font-extrabold whitespace-nowrap ${tone}`}
-                >
-                  {label} <span className="num">{count}</span>
-                </button>
-              );
-            })}
-          </div>
-          {hasFilter && (
-            <button onClick={clearFilters} className="shrink-0 min-h-12 px-3 text-sm font-extrabold underline flex items-center gap-1">
-              <RotateCcw size={16} /> ล้าง
-            </button>
+        <div className="border-t-2 border-black pt-3 space-y-3">
+          {totalTasksCount > 0 && (
+            <div
+              role="img"
+              aria-label={`สัดส่วนสถานะ: ${stageCounts.map(s => `${s.name} ${s.count}`).join(', ')}`}
+              className="flex h-4 border-2 border-black bg-white"
+            >
+              {stageCounts.filter(s => s.count > 0).map(s => (
+                <div key={s.id} title={`${s.name} ${s.count}`} className="h-full border-r-2 border-black last:border-r-0" style={{ width: `${(s.count / totalTasksCount) * 100}%`, backgroundColor: s.color }} />
+              ))}
+            </div>
           )}
-        </div>
-      </div>
-
-      {/* รายการงานขึ้นก่อนบนมือถือ, สถานะรวมอยู่ท้าย */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 items-start">
-        <div className="order-2 lg:order-1 lg:col-span-5 brut p-5 md:p-6 space-y-5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg md:text-xl">สัดส่วนสถานะงาน</h3>
-            <span className="num text-sm font-bold">{baseFilteredTasks.length} ใบงาน</span>
-          </div>
-
-          <div className="mx-auto w-44 h-44 rounded-full flex items-center justify-center border-2 border-black" style={pieStyle}>
-            <div className="w-28 h-28 bg-white rounded-full flex flex-col items-center justify-center border-2 border-black">
-              <span className="num text-3xl font-black">{baseFilteredTasks.length}</span>
-              <span className="text-sm font-bold">ใบงานรวม</span>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            {stats.filter(s => s.count > 0).map(s => (
-              <div key={s.id} className="flex items-center justify-between gap-2 py-1.5">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-3.5 h-3.5 shrink-0 border border-black" style={{ backgroundColor: s.color }} />
-                  <span className="text-sm font-semibold">{s.name}</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 text-sm">
-                  <span className="num font-black">{s.count}</span>
-                  <span className="num w-10 text-right text-neutral-700">{s.percent}%</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="border-t-2 border-black pt-4 space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span>งานที่มีวันทำจ่ายยืนยัน</span>
-              <span className="num font-black">{baseFilteredTasks.filter(t => t.payDate).length} งาน</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>งานที่มีนัดหมายเข้าทำ</span>
-              <span className="num font-black">{baseFilteredTasks.filter(t => t.startDate || t.aptDate).length} งาน</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="order-1 lg:order-2 lg:col-span-7 brut overflow-hidden flex flex-col">
-          <div className="px-4 md:px-6 py-4 border-b-2 border-black bg-[#FFD93D] flex justify-between items-center gap-3">
-            <div>
-              <h3 className="text-lg md:text-xl">ใบงานประจำงวด</h3>
-              <p className="text-sm font-semibold">{selectedMonthFormatted}</p>
-            </div>
-            <span className="num text-sm font-black shrink-0">{finalFilteredTasks.length} รายการ</span>
-          </div>
-
-          <div className="overflow-auto max-h-[75vh] lg:max-h-[620px] p-3 md:p-6 custom-scrollbar bg-[#F8F6F0]">
-            {finalFilteredTasks.length > 0 ? (
-              <div className="flex flex-col gap-3.5">
-                {finalFilteredTasks.map(t => {
-                  const late = lateLabel(t);
-                  return (
-                    <div
-                      key={t.id}
-                      onClick={() => onViewDetail(t)}
-                      className="group relative p-4 bg-white border-2 border-black shadow-[4px_4px_0_0_#111] hover:shadow-[6px_6px_0_0_#111] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-1 active:translate-y-1 active:shadow-none transition-all duration-100 cursor-pointer flex flex-col text-left gap-3"
-                    >
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="num font-black text-black text-xl whitespace-nowrap bg-[#FFD93D] px-2 border-2 border-black">
-                            {t.taskNo}
-                          </span>
-                          {late && (
-                            <span className="bg-[#FF5C5C] border-2 border-black text-sm font-extrabold px-2 py-0.5">{late}</span>
-                          )}
-                          {isCarryOver(t) && (
-                            <span className="bg-white border-2 border-black text-sm font-bold px-2 py-0.5">
-                              ยกยอดจาก {getOriginalMonthStr(t)}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                          <div className="flex items-center gap-1.5 bg-[#FAF8F5] px-2.5 py-1 border border-black">
-                            <Briefcase size={14} />
-                            <span className="text-sm font-bold truncate max-w-[160px]">{t.company}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 bg-[#FAF8F5] px-2.5 py-1 border border-black">
-                            <Building2 size={14} />
-                            <span className="text-sm font-medium truncate max-w-[180px]">{t.project}</span>
-                          </div>
-                          {(t.startDate && t.endDate) || t.aptDate ? (
-                            <div className="flex items-center gap-1.5 bg-[#FAF8F5] px-2.5 py-1 border border-black text-sm font-semibold">
-                              <CalendarDays size={14} />
-                              <span className="num">{t.startDate && t.endDate ? `${t.startDate} - ${t.endDate}` : t.aptDate}</span>
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <div className="flex flex-wrap gap-1.5 mt-2.5">
-                          {t.quoteFileUrl && (
-                            <span className="bg-white text-sm px-2 py-0.5 font-bold flex items-center gap-1 border border-black">
-                              <Paperclip size={12} /> มีใบเสนอราคา
-                            </span>
-                          )}
-                          {t.signedFileUrl && (
-                            <span className="bg-white text-sm px-2 py-0.5 font-bold flex items-center gap-1 border border-black">
-                              <ShieldCheck size={12} /> เซ็นต์อนุมัติแล้ว
-                            </span>
-                          )}
-                          {t.taskFileUrl && (
-                            <span className="bg-white text-sm px-2 py-0.5 font-bold flex items-center gap-1 border border-black">
-                              <FileText size={12} /> มีใบงาน
-                            </span>
-                          )}
-                          {t.payDate && (
-                            <span className="bg-[#B8F2C9] text-sm px-2 py-0.5 font-bold flex items-center gap-1 border border-black">
-                              <DollarSign size={12} /> วันทำจ่าย: <span className="num">{t.payDate}</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {t.status === BILL_WAIT_STATUS && (
-                          <div className="mt-3 inline-flex items-center gap-1.5 bg-[#FFD93D] px-3 py-1 border-2 border-black w-max max-w-full">
-                            <AlertCircle size={14} className="shrink-0" />
-                            <span className="text-sm font-bold">กรุณาส่งเอกสารวางบิลภายในวันที่ 15</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex flex-row flex-wrap items-center justify-between gap-2 border-t-2 border-black pt-3">
-                        <StatusTag label={t.status} />
-                        <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 border border-black">
-                          <MapPin size={14} />
-                          <span className="text-sm font-bold">{t.area}</span>
-                        </div>
-                      </div>
-
-                      {isUnlocked && (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex flex-wrap items-center gap-2 border-t-2 border-black pt-3 bg-[#FFFBEB] -mx-4 -mb-4 px-4 pb-4"
-                        >
-                          <span className="text-sm font-extrabold">แอดมิน:</span>
-                          <div className="flex-1 min-w-[180px] max-w-xs">
-                            <InlineStatusSelect task={t} onSave={onSave} onRequestCancel={onRequestCancel} onRequestDisbursement={onRequestDisbursement} />
-                          </div>
-                          <button onClick={() => onEdit(t)} className="brut-btn min-h-12 px-4 bg-white text-sm font-extrabold flex items-center gap-1.5"><Edit size={16}/><span>แก้ไข</span></button>
-                          <button onClick={() => onRequestCancel(t)} className="brut-btn min-h-12 px-4 bg-[#FF5C5C] text-sm font-extrabold flex items-center gap-1.5"><Trash2 size={16}/><span>ยกเลิก</span></button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <CalendarDays size={48} className="mb-3 opacity-30"/>
-                <p className="text-base font-bold">ไม่พบใบงานตามเงื่อนไขที่เลือก</p>
-                {hasFilter && (
-                  <button onClick={clearFilters} className="brut-btn mt-4 min-h-12 px-4 bg-white text-sm font-extrabold">
-                    ล้างตัวกรองเพื่อดูทั้งหมด
+          <div className="flex items-center gap-2">
+            <div className="flex flex-1 gap-2 overflow-x-auto lg:flex-wrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {pills.map(p => {
+                const on = quickFilter === p.id;
+                const tone = on ? 'bg-black text-white' : p.id === 'overdue' ? 'bg-[#FF5C5C] hover:bg-[#ff7a7a]' : 'bg-white hover:bg-[#FFF7CC]';
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setQuickFilter(p.id)}
+                    aria-pressed={on}
+                    className={`shrink-0 min-h-12 px-4 border-2 border-black text-sm font-extrabold whitespace-nowrap flex items-center gap-2 ${tone}`}
+                  >
+                    {p.color && <span className="w-3 h-3 border border-black shrink-0" style={{ backgroundColor: p.color }} />}
+                    {p.name} <span className="num">{p.count}</span>
                   </button>
-                )}
-              </div>
+                );
+              })}
+            </div>
+            {hasFilter && (
+              <button onClick={clearFilters} className="shrink-0 min-h-12 px-3 text-sm font-extrabold underline flex items-center gap-1">
+                <RotateCcw size={16} /> ล้าง
+              </button>
             )}
           </div>
         </div>
+      </div>
+
+      {/* รายการงาน: หนึ่งแถวต่อใบงาน แตะเพื่อเปิดรายละเอียดและดำเนินการ */}
+      <div className="brut overflow-hidden">
+        <div className="px-4 md:px-6 py-3 border-b-2 border-black bg-[#FFD93D] flex justify-between items-center gap-3">
+          <h3 className="text-lg md:text-xl">ใบงานประจำงวด <span className="block text-sm font-semibold">{selectedMonthFormatted}</span></h3>
+          <span className="num text-sm font-black shrink-0">{finalFilteredTasks.length} รายการ</span>
+        </div>
+
+        {finalFilteredTasks.length > 0 ? (
+          <ul className="divide-y-2 divide-black max-h-[75vh] overflow-auto custom-scrollbar">
+            {finalFilteredTasks.map(t => {
+              const late = lateLabel(t);
+              const due = t.endDate ? `จบ ${t.endDate}` : t.aptDate ? `นัด ${t.aptDate}` : '';
+              return (
+                <li
+                  key={t.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onViewDetail(t)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onViewDetail(t); } }}
+                  className="px-4 md:px-6 py-3 cursor-pointer hover:bg-[#FFF7CC] focus-visible:bg-[#FFF7CC] flex flex-col gap-1.5"
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="num font-black text-lg">{t.taskNo}</span>
+                    <span className="text-sm font-bold shrink-0">{t.area}</span>
+                  </div>
+                  <div className="text-sm truncate">
+                    <span className="font-bold">{t.company}</span>
+                    <span className="text-neutral-700"> · {t.project}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <StatusTag label={t.status} />
+                    {late && <span className="bg-[#FF5C5C] border-2 border-black text-sm font-extrabold px-2 py-0.5">{late}</span>}
+                    {isCarryOver(t) && <span className="text-sm font-bold">ยกยอดจาก {getOriginalMonthStr(t)}</span>}
+                    {due && <span className="num text-sm font-semibold sm:ml-auto">{due}</span>}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <CalendarDays size={48} className="mb-3 opacity-30"/>
+            <p className="text-base font-bold">ไม่พบใบงานตามเงื่อนไขที่เลือก</p>
+            {hasFilter && (
+              <button onClick={clearFilters} className="brut-btn mt-4 min-h-12 px-4 bg-white text-sm font-extrabold">
+                ล้างตัวกรองเพื่อดูทั้งหมด
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
